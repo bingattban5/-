@@ -19,9 +19,16 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // تحديد المعماريات المدعومة لضمان عمل الأدوات التنفيذية في Termux دون مشاكل
+        // تحديد المعماريات المدعومة لضمان عمل الأدوات التنفيذية دون مشاكل
         ndk {
             abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a", "x86_64"))
+        }
+    }
+
+    // الإضافة الحاسمة هنا لحل مشكلة عدم إيجاد ملفات jniLibs التنفيذية
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
