@@ -64,9 +64,10 @@ class YtDlpEngine @Inject constructor(
         isLenient = true
     }
 
+    // التعديل الجذري: توجيه المسار إلى مجلد المكتبات الأصلية للتحايل على قيود أندرويد الحديثة
     private val ytDlpBinary: File by lazy {
-        val filesDir = context.filesDir
-        File(filesDir, "yt-dlp")
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+        File(nativeDir, "libyt-dlp.so")
     }
 
     data class CpuArchitecture(
@@ -94,58 +95,26 @@ class YtDlpEngine @Inject constructor(
     }
 
     fun isYtDlpInstalled(): Boolean {
-        return ytDlpBinary.exists() && ytDlpBinary.canExecute()
+        return ytDlpBinary.exists()
     }
 
+    // بما أن الملف أصبح جزءاً من جافاسكريبت/مكتبات الـ jniLibs، يتم استخراجه تلقائياً بواسطة نظام أندرويد عند التثبيت
     suspend fun installYtDlp(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val arch = detectCpuArchitecture()
-            val binaryName = when (arch.abi) {
-                "arm64-v8a", "armeabi-v7a", "x86_64", "x86" -> "yt-dlp" // Assuming unified binary or handled externally
-                else -> return@withContext Result.failure(Exception("Unsupported architecture: ${arch.abi}"))
+            if (isYtDlpInstalled()) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("CRITICAL: 'libyt-dlp.so' not found in native library directory. Please ensure it is placed in app/src/main/jniLibs/"))
             }
-
-            val assetManager = context.assets
-            val assetsList = assetManager.list("") ?: emptyArray()
-
-            // 1. التحقق الاستباقي من وجود الملف في assets
-            if (!assetsList.contains(binaryName)) {
-                return@withContext Result.failure(Exception("CRITICAL: '$binaryName' not found in assets/. Please place it in app/src/main/assets/"))
-            }
-
-            val inputStream = assetManager.open(binaryName)
-            val outputFile = ytDlpBinary
-            
-            outputFile.parentFile?.mkdirs()
-
-            inputStream.use { input ->
-                outputFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-
-            // --- التعديل هنا: منح الصلاحيات الكاملة للملف ---
-            // القراءة للجميع
-            outputFile.setReadable(true, false)
-            // الكتابة للجميع
-            outputFile.setWritable(true, false)
-            // التنفيذ للجميع (هذا هو الأهم لحل مشكلة error=13)
-            val isExecutable = outputFile.setExecutable(true, false)
-
-            if (!isExecutable) {
-                return@withContext Result.failure(Exception("CRITICAL: Failed to grant execute permission (setExecutable=false) to yt-dlp."))
-            }
-
-            Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(Exception("Failed to install yt-dlp: ${e.javaClass.simpleName} - ${e.message}"))
+            Result.failure(Exception("Failed to verify yt-dlp installation: ${e.javaClass.simpleName} - ${e.message}"))
         }
     }
 
     suspend fun getVersion(): Result<String> = withContext(Dispatchers.IO) {
         try {
             if (!isYtDlpInstalled()) {
-                return@withContext Result.failure(Exception("yt-dlp is not installed or not executable"))
+                return@withContext Result.failure(Exception("yt-dlp is not installed or missing from native libraries"))
             }
 
             val process = ProcessBuilder(ytDlpBinary.absolutePath, "--version")
@@ -174,7 +143,7 @@ class YtDlpEngine @Inject constructor(
     suspend fun analyzeUrl(url: String): Result<YtDlpVideoInfo> = withContext(Dispatchers.IO) {
         try {
             if (!isYtDlpInstalled()) {
-                return@withContext Result.failure(Exception("yt-dlp is not installed or not executable"))
+                return@withContext Result.failure(Exception("yt-dlp is not installed or missing from native libraries"))
             }
 
             if (url.isBlank()) {
@@ -213,7 +182,7 @@ class YtDlpEngine @Inject constructor(
             Result.success(videoInfo)
         } catch (e: IOException) {
             if (e.message?.contains("error=13") == true) {
-                Result.failure(Exception("Execution blocked (error=13). Try reinstalling yt-dlp."))
+                Result.failure(Exception("Execution blocked (error=13). Permission denied."))
             } else {
                 Result.failure(Exception("Failed to analyze URL (IO): ${e.message}"))
             }
@@ -228,7 +197,7 @@ class YtDlpEngine @Inject constructor(
         outputPath: String
     ): Flow<DownloadProgress> = flow {
         if (!isYtDlpInstalled()) {
-            throw Exception("yt-dlp is not installed or not executable")
+            throw Exception("yt-dlp is not installed or missing from native libraries")
         }
 
         val outputFile = File(outputPath)
