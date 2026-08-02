@@ -311,3 +311,5 @@ class YtDlpEngine @Inject constructor(
         } catch (e: Exception) {
             Result.failure(Exception("Subtitle download failed: ${e.message}"))
         }
+    }
+}
