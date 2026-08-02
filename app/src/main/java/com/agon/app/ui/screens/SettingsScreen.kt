@@ -268,7 +268,7 @@ fun SettingsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     AboutRow("اسم التطبيق", "SubVIDD")
                     AboutRow("الإصدار", "1.0.0")
-                    AboutRow("المطور", "Agon Development")
+                    AboutRow("المطور", "Saeed Bingattban")
                     AboutRow("الترخيص", "مفتوح المصدر - MIT")
                     androidx.compose.material3.HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
