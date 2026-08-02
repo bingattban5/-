@@ -25,79 +25,42 @@ data class FFmpegProgress(
 class FFmpegEngine @Inject constructor(
     private val context: Context
 ) {
+    // التعديل الجذري: توجيه المسار إلى مجلد المكتبات الأصلية للتحايل على قيود أندرويد الحديثة وتجنب خطأ 13
     private val ffmpegBinary: File by lazy {
-        val filesDir = context.filesDir
-        File(filesDir, "ffmpeg")
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+        File(nativeDir, "libffmpeg.so")
     }
 
     private val ffprobeBinary: File by lazy {
-        val filesDir = context.filesDir
-        File(filesDir, "ffprobe")
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+        File(nativeDir, "libffprobe.so")
     }
 
     fun isFFmpegInstalled(): Boolean {
-        return ffmpegBinary.exists() && ffmpegBinary.canExecute()
+        return ffmpegBinary.exists()
     }
 
     fun isFFprobeInstalled(): Boolean {
-        return ffprobeBinary.exists() && ffprobeBinary.canExecute()
+        return ffprobeBinary.exists()
     }
 
+    // بما أن الملفات أصبحت جزءاً من مجلد jniLibs، يتم استخراجها تلقائياً بواسطة نظام أندرويد عند التثبيت
     suspend fun installFFmpeg(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val arch = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
-            val binaryName = when (arch) {
-                "arm64-v8a" -> "ffmpeg-arm64"
-                "armeabi-v7a" -> "ffmpeg-arm"
-                "x86_64" -> "ffmpeg-x86_64"
-                "x86" -> "ffmpeg-x86"
-                else -> return@withContext Result.failure(Exception("Unsupported architecture: $arch"))
+            if (isFFmpegInstalled() && isFFprobeInstalled()) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("CRITICAL: 'libffmpeg.so' or 'libffprobe.so' not found in native library directory. Please ensure they are placed in app/src/main/jniLibs/"))
             }
-
-            val ffprobeName = binaryName.replace("ffmpeg", "ffprobe")
-            val assetManager = context.assets
-            val assetsList = assetManager.list("") ?: emptyArray()
-
-            // التحقق الاستباقي من وجود الملفات في الـ assets
-            if (!assetsList.contains(binaryName)) {
-                return@withContext Result.failure(Exception("CRITICAL: '$binaryName' not found in app/src/main/assets/"))
-            }
-            if (!assetsList.contains(ffprobeName)) {
-                return@withContext Result.failure(Exception("CRITICAL: '$ffprobeName' not found in app/src/main/assets/"))
-            }
-            
-            // Install ffmpeg
-            val ffmpegInput = assetManager.open(binaryName)
-            ffmpegInput.use { input ->
-                ffmpegBinary.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            if (!ffmpegBinary.setExecutable(true)) {
-                return@withContext Result.failure(Exception("CRITICAL: Failed to grant execute permission to FFmpeg binary."))
-            }
-
-            // Install ffprobe
-            val ffprobeInput = assetManager.open(ffprobeName)
-            ffprobeInput.use { input ->
-                ffprobeBinary.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            if (!ffprobeBinary.setExecutable(true)) {
-                return@withContext Result.failure(Exception("CRITICAL: Failed to grant execute permission to FFprobe binary."))
-            }
-
-            Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(Exception("Failed to install FFmpeg: ${e.message}"))
+            Result.failure(Exception("Failed to verify FFmpeg installation: ${e.message}"))
         }
     }
 
     suspend fun getVersion(): Result<String> = withContext(Dispatchers.IO) {
         try {
             if (!isFFmpegInstalled()) {
-                return@withContext Result.failure(Exception("FFmpeg is not installed or lacks permissions"))
+                return@withContext Result.failure(Exception("FFmpeg is not installed or missing from native libraries"))
             }
 
             val process = ProcessBuilder(ffmpegBinary.absolutePath, "-version")
@@ -127,7 +90,7 @@ class FFmpegEngine @Inject constructor(
     suspend fun getMediaDuration(filePath: String): Result<Long> = withContext(Dispatchers.IO) {
         try {
             if (!isFFprobeInstalled()) {
-                return@withContext Result.failure(Exception("FFprobe is not installed or lacks permissions"))
+                return@withContext Result.failure(Exception("FFprobe is not installed or missing from native libraries"))
             }
 
             val process = ProcessBuilder(
@@ -163,7 +126,7 @@ class FFmpegEngine @Inject constructor(
         audioPath: String,
         outputPath: String
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
         
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
@@ -223,7 +186,7 @@ class FFmpegEngine @Inject constructor(
         outputPath: String,
         format: String = "mp3"
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
 
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
@@ -289,7 +252,7 @@ class FFmpegEngine @Inject constructor(
         subtitlePath: String,
         outputPath: String
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
 
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
@@ -348,7 +311,7 @@ class FFmpegEngine @Inject constructor(
         outputPath: String,
         language: String = "ara"
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
 
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
@@ -410,7 +373,7 @@ class FFmpegEngine @Inject constructor(
         startTime: String,
         duration: String
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
 
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
@@ -459,7 +422,7 @@ class FFmpegEngine @Inject constructor(
         crf: Int = 23,
         preset: String = "medium"
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
 
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
@@ -521,7 +484,7 @@ class FFmpegEngine @Inject constructor(
         videoCodec: String = "copy",
         audioCodec: String = "copy"
     ): Flow<FFmpegProgress> = flow {
-        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or lacks permissions")
+        if (!isFFmpegInstalled()) throw Exception("FFmpeg is not installed or missing from native libraries")
 
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
