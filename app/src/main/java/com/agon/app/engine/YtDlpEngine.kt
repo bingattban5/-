@@ -124,8 +124,14 @@ class YtDlpEngine @Inject constructor(
                 }
             }
 
-            // 2. التحقق الفعلي من منح الصلاحيات
-            val isExecutable = outputFile.setExecutable(true)
+            // --- التعديل هنا: منح الصلاحيات الكاملة للملف ---
+            // القراءة للجميع
+            outputFile.setReadable(true, false)
+            // الكتابة للجميع
+            outputFile.setWritable(true, false)
+            // التنفيذ للجميع (هذا هو الأهم لحل مشكلة error=13)
+            val isExecutable = outputFile.setExecutable(true, false)
+
             if (!isExecutable) {
                 return@withContext Result.failure(Exception("CRITICAL: Failed to grant execute permission (setExecutable=false) to yt-dlp."))
             }
@@ -247,7 +253,6 @@ class YtDlpEngine @Inject constructor(
                 val progress = progressMatch.groupValues[1].toFloatOrNull()?.toInt() ?: 0
                 emit(DownloadProgress(progress, currentLine))
             } else if (currentLine.contains("ERROR:") || currentLine.contains("error")) {
-                // التقاط أخطاء yt-dlp وإرسالها
                 emit(DownloadProgress(-1, currentLine)) 
             }
         }
@@ -306,5 +311,3 @@ class YtDlpEngine @Inject constructor(
         } catch (e: Exception) {
             Result.failure(Exception("Subtitle download failed: ${e.message}"))
         }
-    }
-}
