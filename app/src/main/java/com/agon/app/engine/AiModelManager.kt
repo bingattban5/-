@@ -27,8 +27,11 @@ class AiModelManager @Inject constructor(
         File(context.cacheDir, "model_downloads").apply { mkdirs() }
     }
 
-    // خريطة لتتبع اتصالات التحميل النشطة لتمكين خاصية الإلغاء
+    // خريطة لتتبع اتصالات التحميل النشطة
     private val activeDownloads = ConcurrentHashMap<String, java.net.HttpURLConnection>()
+    
+    // مجموعة لتتبع النماذج التي تم إيقافها مؤقتاً (لتمييزها عن الملغاة)
+    private val pausedDownloads = ConcurrentHashMap.newKeySet<String>()
 
     data class ModelInfo(
         val id: String,
@@ -261,7 +264,7 @@ class AiModelManager @Inject constructor(
     }
 
     /**
-     * Download model with progress tracking
+     * Download model with progress tracking and Resume support
      */
     suspend fun downloadModel(
         modelId: String,
@@ -285,27 +288,44 @@ class AiModelManager @Inject constructor(
                 return@withContext Result.success(finalFile)
             }
 
-            val downloadedBytes = if (tempFile.exists()) tempFile.length() else 0L
+            var downloadedBytes = if (tempFile.exists()) tempFile.length() else 0L
             
             connection = java.net.URL(modelInfo.downloadUrl).openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 30_000
             connection.readTimeout = 30_000
             
-            // تسجيل الاتصال النشط لتمكين الإلغاء
-            activeDownloads[modelId] = connection
-            
+            // طلب استئناف التحميل إذا كان هناك بيانات محفوظة
             if (downloadedBytes > 0) {
                 connection.setRequestProperty("Range", "bytes=$downloadedBytes-")
             }
+            
+            // تسجيل الاتصال النشط
+            activeDownloads[modelId] = connection
             connection.connect()
 
             val responseCode = connection.responseCode
-            if (responseCode != 200 && responseCode != 206) {
+            
+            // إذا كان الخادم لا يدعم الاستئناف (أعاد 200 بدلاً من 206 رغم طلب Range)
+            // نقوم بحذف الملف المؤقت والبدء من جديد لتجنب تلف الملف
+            if (responseCode == 200 && downloadedBytes > 0) {
+                tempFile.delete()
+                downloadedBytes = 0L
                 connection.disconnect()
-                return@withContext Result.failure(Exception("Download failed: HTTP $responseCode from ${modelInfo.downloadUrl}"))
+                
+                // إعادة الاتصال بدون Range
+                connection = java.net.URL(modelInfo.downloadUrl).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 30_000
+                connection.readTimeout = 30_000
+                activeDownloads[modelId] = connection
+                connection.connect()
             }
 
-            val totalBytes = if (responseCode == 206) {
+            if (connection.responseCode != 200 && connection.responseCode != 206) {
+                connection.disconnect()
+                return@withContext Result.failure(Exception("Download failed: HTTP ${connection.responseCode} from ${modelInfo.downloadUrl}"))
+            }
+
+            val totalBytes = if (connection.responseCode == 206) {
                 val contentRange = connection.getHeaderField("Content-Range")
                 contentRange?.substringAfter("/")?.toLongOrNull() ?: modelInfo.sizeBytes
             } else {
@@ -313,16 +333,20 @@ class AiModelManager @Inject constructor(
             }
 
             var currentBytes = downloadedBytes
+            val shouldAppend = downloadedBytes > 0 && connection.responseCode == 206
 
             connection.inputStream.use { input ->
-                if (downloadedBytes > 0) {
+                if (shouldAppend) {
                     java.io.FileOutputStream(tempFile, true).use { appendOutput ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
-                            // التصحيح: التحقق مما إذا تم إزالة النموذج من قائمة التحميل النشط (بسبب الإلغاء)
                             if (!activeDownloads.containsKey(modelId)) {
-                                throw java.io.IOException("تم إلغاء التحميل يدوياً")
+                                if (pausedDownloads.contains(modelId)) {
+                                    throw java.io.IOException("PAUSE_REQUESTED")
+                                } else {
+                                    throw java.io.IOException("CANCEL_REQUESTED")
+                                }
                             }
                             appendOutput.write(buffer, 0, bytesRead)
                             currentBytes += bytesRead
@@ -335,9 +359,12 @@ class AiModelManager @Inject constructor(
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
-                            // التصحيح: التحقق مما إذا تم إزالة النموذج من قائمة التحميل النشط (بسبب الإلغاء)
                             if (!activeDownloads.containsKey(modelId)) {
-                                throw java.io.IOException("تم إلغاء التحميل يدوياً")
+                                if (pausedDownloads.contains(modelId)) {
+                                    throw java.io.IOException("PAUSE_REQUESTED")
+                                } else {
+                                    throw java.io.IOException("CANCEL_REQUESTED")
+                                }
                             }
                             output.write(buffer, 0, bytesRead)
                             currentBytes += bytesRead
@@ -361,40 +388,52 @@ class AiModelManager @Inject constructor(
 
             Result.success(finalFile)
         } catch (e: Exception) {
-            // تنظيف الملف المؤقت في حالة الفشل أو الإلغاء
             val tempFile = File(tempDir, "$modelId.tmp")
-            if (tempFile.exists()) {
-                tempFile.delete()
-            }
             
-            // التصحيح: التحقق من رسالة الخطأ لتحديد ما إذا كان السبب هو الإلغاء
-            val isCanceled = e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true || 
-                             e.message?.contains("Canceled", ignoreCase = true) == true ||
-                             e.message?.contains("stream closed", ignoreCase = true) == true // نتيجة طبيعية لـ disconnect()
-                             
-            if (isCanceled) {
-                Result.failure(Exception("تم إلغاء التحميل"))
+            val isPaused = e.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
+            val isCanceled = e.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true || 
+                             e.message?.contains("stream closed", ignoreCase = true) == true
+
+            if (isPaused) {
+                // في حالة الإيقاف المؤقت، نحتفظ بالملف المؤقت
+                Result.failure(Exception("PAUSE_REQUESTED"))
+            } else if (isCanceled) {
+                // في حالة الإلغاء، نحذف الملف المؤقت لتوفير المساحة
+                if (tempFile.exists()) {
+                    tempFile.delete()
+                }
+                Result.failure(Exception("CANCEL_REQUESTED"))
             } else {
+                // في حالة الخطأ الآخر، نحذف الملف المؤقت أيضاً
+                if (tempFile.exists()) {
+                    tempFile.delete()
+                }
                 Result.failure(Exception("Download error for $modelId: ${e.message}"))
             }
         } finally {
-            // إزالة الاتصال من القائمة النشطة دائماً لضمان عدم تسرب الذاكرة
             activeDownloads.remove(modelId)
+            pausedDownloads.remove(modelId) // تنظيف الحالة في كل الأحوال
             connection?.disconnect()
         }
     }
 
     /**
-     * إلغاء تحميل نموذج قيد التحميل حالياً
+     * إيقاف التحميل مؤقتاً (يحتفظ بالملف المؤقت للاستئناف)
+     */
+    fun pauseDownload(modelId: String) {
+        pausedDownloads.add(modelId)
+        val connection = activeDownloads.remove(modelId)
+        connection?.disconnect() // هذا سيؤدي إلى رمي استثناء PAUSE_REQUESTED في حلقة القراءة
+    }
+
+    /**
+     * إلغاء التحميل نهائياً (يحذف الملف المؤقت لتوفير المساحة)
      */
     fun cancelDownload(modelId: String) {
+        pausedDownloads.remove(modelId)
         val connection = activeDownloads.remove(modelId)
-        if (connection != null) {
-            // قطع الاتصال سيؤدي إلى رمي استثناء (Stream closed) داخل حلقة القراءة، مما يوقف التحميل فوراً
-            connection.disconnect()
-        }
+        connection?.disconnect()
         
-        // حذف الملف المؤقت فوراً لتحرير مساحة التخزين
         val tempFile = File(tempDir, "$modelId.tmp")
         if (tempFile.exists()) {
             tempFile.delete()
