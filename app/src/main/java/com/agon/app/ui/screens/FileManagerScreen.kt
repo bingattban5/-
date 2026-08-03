@@ -479,14 +479,14 @@ private fun StorageSummaryBar(
                         modifier = Modifier
                             .weight(3f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(start = 6.dp, end = 0.dp))
+                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = 6.dp))
                             .background(MaterialTheme.colorScheme.primary)
                     )
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(start = 0.dp, end = 6.dp))
+                            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 6.dp, bottomEnd = 6.dp, bottomStart = 0.dp))
                             .background(VibrantOrange)
                     )
                 }
