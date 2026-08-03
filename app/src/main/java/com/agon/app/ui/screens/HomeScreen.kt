@@ -214,7 +214,7 @@ fun MainInputScreen(
                     
                     // اسم التطبيق بتدرج لوني هندسي عريض
                     Text(
-                        text = "محمل الفيديو و الترجمة",
+                        text = "تحميل الفيديو و الترجمة",
                         style = MaterialTheme.typography.headlineLarge.copy(
                             brush = Brush.linearGradient(
                                 colors = listOf(Color(0xFF4FC3F7), Color(0xFF1A237E)),
