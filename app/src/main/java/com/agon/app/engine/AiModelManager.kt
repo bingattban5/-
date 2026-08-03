@@ -30,7 +30,7 @@ class AiModelManager @Inject constructor(
     // خريطة لتتبع اتصالات التحميل النشطة
     private val activeDownloads = ConcurrentHashMap<String, java.net.HttpURLConnection>()
     
-    // مجموعة لتتبع النماذج التي تم إيقافها مؤقتاً (لتمييزها عن الملغاة)
+    // مجموعة لتتبع النماذج التي تم إيقافها مؤقتاً
     private val pausedDownloads = ConcurrentHashMap.newKeySet<String>()
 
     data class ModelInfo(
@@ -52,9 +52,6 @@ class AiModelManager @Inject constructor(
         ARGOS
     }
 
-    /**
-     * Get list of available Whisper models
-     */
     fun getAvailableWhisperModels(): List<ModelInfo> {
         return listOf(
             ModelInfo(
@@ -100,13 +97,8 @@ class AiModelManager @Inject constructor(
         )
     }
 
-    /**
-     * Get list of available Argos Translate models
-     * Includes direct models and pivot (to English) models
-     */
     fun getAvailableArgosModels(): List<ModelInfo> {
         return listOf(
-            // === Direct to Arabic ===
             ModelInfo(
                 id = "argos-en-ar",
                 name = "English → Arabic",
@@ -118,8 +110,6 @@ class AiModelManager @Inject constructor(
                 description = "Translate English subtitles to Arabic",
                 language = "en-ar"
             ),
-
-            // === Pivot to English (for pivot translation to Arabic) ===
             ModelInfo(
                 id = "argos-fr-en",
                 name = "French → English",
@@ -164,8 +154,6 @@ class AiModelManager @Inject constructor(
                 description = "Turkish to English pivot model",
                 language = "tr-en"
             ),
-
-            // === Pivot translation pairs (display only, no direct download) ===
             ModelInfo(
                 id = "argos-fr-ar",
                 name = "French → Arabic (via English)",
@@ -213,41 +201,28 @@ class AiModelManager @Inject constructor(
         )
     }
 
-    /**
-     * Get the pivot model IDs required for a given language pair.
-     * Returns null if direct translation is available.
-     */
     fun getPivotModels(language: String): List<String>? {
         return when (language) {
             "fr-ar" -> listOf("argos-fr-en", "argos-en-ar")
             "es-ar" -> listOf("argos-es-en", "argos-en-ar")
             "de-ar" -> listOf("argos-de-en", "argos-en-ar")
             "tr-ar" -> listOf("argos-tr-en", "argos-en-ar")
-            "en-ar" -> null // Direct, no pivot needed
+            "en-ar" -> null
             else -> null
         }
     }
 
-    /**
-     * Check if a pivot model pair is fully installed
-     */
     suspend fun isPivotPairInstalled(sourceLang: String, targetLang: String): Boolean {
         val language = "$sourceLang-$targetLang"
         val pivotModels = getPivotModels(language) ?: return isModelInstalled("argos-$language")
         return pivotModels.all { isModelInstalled(it) }
     }
 
-    /**
-     * Check if model is downloaded and not corrupted
-     */
     suspend fun isModelInstalled(modelId: String): Boolean = withContext(Dispatchers.IO) {
         val modelFile = File(modelsDir, modelId)
         modelFile.exists() && !isModelCorrupted(modelId)
     }
 
-    /**
-     * Check if model file is corrupted by verifying checksum
-     */
     suspend fun isModelCorrupted(modelId: String): Boolean = withContext(Dispatchers.IO) {
         val modelFile = File(modelsDir, modelId)
         if (!modelFile.exists()) return@withContext true
@@ -263,9 +238,6 @@ class AiModelManager @Inject constructor(
         }
     }
 
-    /**
-     * Download model with progress tracking and Resume support
-     */
     suspend fun downloadModel(
         modelId: String,
         onProgress: (Int, Long, Long) -> Unit
@@ -294,25 +266,20 @@ class AiModelManager @Inject constructor(
             connection.connectTimeout = 30_000
             connection.readTimeout = 30_000
             
-            // طلب استئناف التحميل إذا كان هناك بيانات محفوظة
             if (downloadedBytes > 0) {
                 connection.setRequestProperty("Range", "bytes=$downloadedBytes-")
             }
             
-            // تسجيل الاتصال النشط
             activeDownloads[modelId] = connection
             connection.connect()
 
             val responseCode = connection.responseCode
             
-            // إذا كان الخادم لا يدعم الاستئناف (أعاد 200 بدلاً من 206 رغم طلب Range)
-            // نقوم بحذف الملف المؤقت والبدء من جديد لتجنب تلف الملف
             if (responseCode == 200 && downloadedBytes > 0) {
                 tempFile.delete()
                 downloadedBytes = 0L
                 connection.disconnect()
                 
-                // إعادة الاتصال بدون Range
                 connection = java.net.URL(modelInfo.downloadUrl).openConnection() as java.net.HttpURLConnection
                 connection.connectTimeout = 30_000
                 connection.readTimeout = 30_000
@@ -390,21 +357,21 @@ class AiModelManager @Inject constructor(
         } catch (e: Exception) {
             val tempFile = File(tempDir, "$modelId.tmp")
             
-            val isPaused = e.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
-            val isCanceled = e.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true || 
-                             e.message?.contains("stream closed", ignoreCase = true) == true
+            // التصحيح الجذري: التعرف على "Socket closed" كإشارة إيقاف/إلغاء يدوي
+            val isPaused = pausedDownloads.contains(modelId) || e.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
+            
+            val isManualDisconnect = e.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true ||
+                                     e.message?.contains("Socket closed", ignoreCase = true) == true || // <-- الإضافة هنا
+                                     e.message?.contains("stream closed", ignoreCase = true) == true
 
             if (isPaused) {
-                // في حالة الإيقاف المؤقت، نحتفظ بالملف المؤقت
                 Result.failure(Exception("PAUSE_REQUESTED"))
-            } else if (isCanceled) {
-                // في حالة الإلغاء، نحذف الملف المؤقت لتوفير المساحة
+            } else if (isManualDisconnect) {
                 if (tempFile.exists()) {
                     tempFile.delete()
                 }
                 Result.failure(Exception("CANCEL_REQUESTED"))
             } else {
-                // في حالة الخطأ الآخر، نحذف الملف المؤقت أيضاً
                 if (tempFile.exists()) {
                     tempFile.delete()
                 }
@@ -412,23 +379,17 @@ class AiModelManager @Inject constructor(
             }
         } finally {
             activeDownloads.remove(modelId)
-            pausedDownloads.remove(modelId) // تنظيف الحالة في كل الأحوال
+            pausedDownloads.remove(modelId)
             connection?.disconnect()
         }
     }
 
-    /**
-     * إيقاف التحميل مؤقتاً (يحتفظ بالملف المؤقت للاستئناف)
-     */
     fun pauseDownload(modelId: String) {
         pausedDownloads.add(modelId)
         val connection = activeDownloads.remove(modelId)
-        connection?.disconnect() // هذا سيؤدي إلى رمي استثناء PAUSE_REQUESTED في حلقة القراءة
+        connection?.disconnect()
     }
 
-    /**
-     * إلغاء التحميل نهائياً (يحذف الملف المؤقت لتوفير المساحة)
-     */
     fun cancelDownload(modelId: String) {
         pausedDownloads.remove(modelId)
         val connection = activeDownloads.remove(modelId)
@@ -440,9 +401,6 @@ class AiModelManager @Inject constructor(
         }
     }
 
-    /**
-     * Delete model
-     */
     fun deleteModel(modelId: String): Boolean {
         val modelFile = File(modelsDir, modelId)
         return if (modelFile.exists()) {
@@ -452,25 +410,16 @@ class AiModelManager @Inject constructor(
         }
     }
 
-    /**
-     * Get total storage used by all models
-     */
     fun getTotalStorageUsed(): Long {
         return modelsDir.walkTopDown()
             .filter { it.isFile }
             .sumOf { it.length() }
     }
 
-    /**
-     * Get all available models (Whisper + Argos)
-     */
     fun getAllModels(): List<ModelInfo> {
         return getAvailableWhisperModels() + getAvailableArgosModels()
     }
 
-    /**
-     * Calculate SHA-256 checksum of a file
-     */
     private suspend fun calculateChecksum(file: File): String = withContext(Dispatchers.IO) {
         val digest = MessageDigest.getInstance("SHA-256")
         FileInputStream(file).use { fis ->
@@ -483,16 +432,10 @@ class AiModelManager @Inject constructor(
         digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /**
-     * Get expected checksum for a model
-     */
     private fun getExpectedChecksum(modelId: String): String? {
         return getAllModels().find { it.id == modelId }?.checksum
     }
 
-    /**
-     * Format bytes to human readable string
-     */
     private fun formatBytes(bytes: Long): String {
         return when {
             bytes >= 1_073_741_824 -> String.format("%.1f GB", bytes / 1_073_741_824.0)
