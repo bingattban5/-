@@ -24,6 +24,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +38,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.agon.app.ui.components.AppPermissionHandler // استيراد المكون الجديد
 import com.agon.app.ui.screens.DownloadsScreen
 import com.agon.app.ui.screens.FileManagerScreen
 import com.agon.app.ui.screens.HomeScreen
@@ -57,7 +59,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AgonAppTheme {
-                MainApp()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    MainApp()
+                }
             }
         }
     }
@@ -82,34 +89,41 @@ fun MainApp() {
         NavItem("settings", "الإعدادات", Icons.Filled.Settings, Icons.Outlined.Settings)
     )
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = { BottomNav(navController, navItems) },
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = "home",
-            modifier = Modifier.padding(innerPadding),
-        ) {
-            composable("home") {
-                val viewModel: HomeViewModel = hiltViewModel()
-                HomeScreen(viewModel = viewModel)
-            }
-            composable("downloads") {
-                val viewModel: DownloadsViewModel = hiltViewModel()
-                DownloadsScreen(viewModel = viewModel)
-            }
-            composable("models") {
-                val viewModel: ModelsViewModel = hiltViewModel()
-                ModelsScreen(viewModel = viewModel)
-            }
-            composable("files") {
-                val viewModel: FileManagerViewModel = hiltViewModel()
-                FileManagerScreen(viewModel = viewModel)
-            }
-            composable("settings") {
-                val viewModel: SettingsViewModel = hiltViewModel()
-                SettingsScreen(viewModel = viewModel)
+    // تغليف التطبيق بمعالج الصلاحيات
+    AppPermissionHandler(
+        onPermissionsGranted = {
+            // يتم تنفيذ هذا الكود فقط بعد منح الصلاحيات بنجاح
+        }
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = { BottomNav(navController, navItems) },
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = "home",
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                composable("home") {
+                    val viewModel: HomeViewModel = hiltViewModel()
+                    HomeScreen(viewModel = viewModel)
+                }
+                composable("downloads") {
+                    val viewModel: DownloadsViewModel = hiltViewModel()
+                    DownloadsScreen(viewModel = viewModel)
+                }
+                composable("models") {
+                    val viewModel: ModelsViewModel = hiltViewModel()
+                    ModelsScreen(viewModel = viewModel)
+                }
+                composable("files") {
+                    val viewModel: FileManagerViewModel = hiltViewModel()
+                    FileManagerScreen(viewModel = viewModel)
+                }
+                composable("settings") {
+                    val viewModel: SettingsViewModel = hiltViewModel()
+                    SettingsScreen(viewModel = viewModel)
+                }
             }
         }
     }
