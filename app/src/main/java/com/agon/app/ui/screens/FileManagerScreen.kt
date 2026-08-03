@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -98,7 +102,6 @@ fun FileManagerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     
-    // حالة التبديل بين عرض الشبكة وعرض القائمة
     var isGridView by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -123,7 +126,6 @@ fun FileManagerScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Header & Toggle View
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -145,7 +147,6 @@ fun FileManagerScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                // أيقونة التبديل بين الشبكة والقائمة
                 IconButton(
                     onClick = { isGridView = !isGridView },
                     modifier = Modifier
@@ -164,7 +165,6 @@ fun FileManagerScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 1. ملخص التخزين: شريط تقدم أفقي متصل ومقوس
             StorageSummaryBar(
                 totalSize = uiState.totalSize,
                 tempSize = uiState.tempSize,
@@ -173,7 +173,6 @@ fun FileManagerScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. شريط البحث الزجاجي
             var isSearchFocused by remember { mutableStateOf(false) }
             val glowColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isSearchFocused) 0.3f else 0f)
             
@@ -216,7 +215,6 @@ fun FileManagerScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 3. فلاتر الملفات: أزرار بيضاوية عائمة + أزرار الإجراءات
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -255,7 +253,6 @@ fun FileManagerScreen(
                     }
                 }
                 
-                // أزرار الإجراءات السريعة
                 IconButton(
                     onClick = { viewModel.findDuplicates() },
                     modifier = Modifier
@@ -278,7 +275,6 @@ fun FileManagerScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // File count
             Text(
                 text = "${uiState.filteredFiles.size} ملف",
                 style = MaterialTheme.typography.labelMedium,
@@ -288,7 +284,6 @@ fun FileManagerScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 4. عرض الملفات (قائمة أو شبكة)
             if (uiState.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -305,7 +300,7 @@ fun FileManagerScreen(
             } else {
                 if (isGridView) {
                     LazyVerticalGrid(
-                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                        columns = GridCells.Fixed(2),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -355,7 +350,6 @@ fun FileManagerScreen(
         )
     }
 
-    // Rename Dialog
     if (uiState.showRenameDialog != null) {
         val file = uiState.showRenameDialog!!
         var newName by remember { mutableStateOf(file.name) }
@@ -389,7 +383,6 @@ fun FileManagerScreen(
         )
     }
 
-    // Delete Dialog
     if (uiState.showDeleteDialog != null) {
         val file = uiState.showDeleteDialog!!
         AlertDialog(
@@ -399,7 +392,7 @@ fun FileManagerScreen(
             confirmButton = {
                 TextButton(
                     onClick = viewModel::deleteFile,
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
@@ -414,7 +407,6 @@ fun FileManagerScreen(
         )
     }
 
-    // Duplicate Dialog
     if (uiState.showDuplicateDialog) {
         AlertDialog(
             onDismissRequest = viewModel::dismissDuplicateDialog,
@@ -434,7 +426,7 @@ fun FileManagerScreen(
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.deleteDuplicates(uiState.duplicates) },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
@@ -449,10 +441,6 @@ fun FileManagerScreen(
         )
     }
 }
-
-// ==========================================
-// مكونات واجهة المستخدم المخصصة لمدير الملفات
-// ==========================================
 
 @Composable
 private fun StorageSummaryBar(
@@ -479,7 +467,6 @@ private fun StorageSummaryBar(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // الشريط المتصل والمقوس
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -488,7 +475,6 @@ private fun StorageSummaryBar(
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // الجزء الأزرق (المساحة الرئيسية) - نسبة تقديرية 75% للعرض البصري
                     Box(
                         modifier = Modifier
                             .weight(3f)
@@ -496,7 +482,6 @@ private fun StorageSummaryBar(
                             .clip(RoundedCornerShape(start = 6.dp, end = 0.dp))
                             .background(MaterialTheme.colorScheme.primary)
                     )
-                    // الجزء البرتقالي (المؤقتة) - نسبة تقديرية 25% للعرض البصري
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -527,7 +512,6 @@ private fun FileItemCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // File type icon with Pastel Background
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -560,7 +544,6 @@ private fun FileItemCard(
                 )
             }
 
-            // File info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = file.name,
@@ -599,7 +582,6 @@ private fun FileItemCard(
                 }
             }
 
-            // Actions
             Box {
                 IconButton(onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
                     Icon(
@@ -720,9 +702,6 @@ private fun FileGridItemCard(
         }
     }
 
-    // Dropdown for Grid View (positioned absolutely or via Box wrapper in real app, simplified here)
-    // For simplicity in Grid, we can just trigger the dialog directly or use a Box wrapper like the list view.
-    // Reusing the same Dropdown logic wrapped in a Box at the top right:
     Box(modifier = Modifier.fillMaxSize()) {
         DropdownMenu(
             expanded = showMenu,
