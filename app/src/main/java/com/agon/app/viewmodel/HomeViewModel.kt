@@ -40,7 +40,7 @@ data class HomeUiState(
     val isDownloading: Boolean = false,
     val downloadProgress: Int = 0,
     val analysisStep: String = "",
-    val cpuArch: String = "",
+    val cpuArch: String = "Android Native",
     val srtContent: String = "",
     val showSrtPreview: Boolean = false,
     val successMessage: String? = null
@@ -62,9 +62,9 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
-        val arch = ytDlpEngine.detectCpuArchitecture()
+        // تعيين قيمة افتراضية للمعمارية بعد أن أصبحت المكتبة تديرها تلقائياً
         _uiState.value = _uiState.value.copy(
-            cpuArch = arch.displayName
+            cpuArch = "ARM 64-bit / Universal"
         )
     }
 
@@ -91,28 +91,6 @@ class HomeViewModel @Inject constructor(
                 videoInfo = null,
                 showBottomSheet = false
             )
-
-            _uiState.value = _uiState.value.copy(analysisStep = "فحص المعمارية...")
-            val arch = ytDlpEngine.detectCpuArchitecture()
-            if (!arch.isSupported) {
-                _uiState.value = _uiState.value.copy(
-                    isAnalyzing = false,
-                    errorMessage = "معمارية المعالج غير مدعومة: ${arch.displayName}"
-                )
-                return@launch
-            }
-
-            if (!ytDlpEngine.isYtDlpInstalled()) {
-                _uiState.value = _uiState.value.copy(analysisStep = "تثبيت yt-dlp...")
-                val installResult = ytDlpEngine.installYtDlp()
-                if (installResult.isFailure) {
-                    _uiState.value = _uiState.value.copy(
-                        isAnalyzing = false,
-                        errorMessage = "فشل تثبيت yt-dlp: ${installResult.exceptionOrNull()?.message}"
-                    )
-                    return@launch
-                }
-            }
 
             _uiState.value = _uiState.value.copy(analysisStep = "جلب معلومات الفيديو عبر yt-dlp...")
             val result = analyzeUrlUseCase(url)
