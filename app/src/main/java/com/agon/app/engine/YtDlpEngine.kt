@@ -13,6 +13,7 @@ import kotlinx.serialization.json.Json
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import java.io.File
+import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,6 +65,11 @@ class YtDlpEngine @Inject constructor(
         isLenient = true
     }
 
+    // مجلد مخصص لحفظ ملفات الـ Cookies
+    private val cookiesDir: File by lazy {
+        File(context.filesDir, "yt_dlp_cookies").apply { mkdirs() }
+    }
+
     fun isYtDlpInstalled(): Boolean {
         return true 
     }
@@ -74,12 +80,35 @@ class YtDlpEngine @Inject constructor(
 
     suspend fun getVersion(): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // تم حل الخطأ الأول: تمرير الـ context لدالة version
             val version = YoutubeDL.getInstance().version(context)
             Result.success(version ?: "Unknown")
         } catch (e: Exception) {
             Result.failure(Exception("Failed to get version: ${e.message}"))
         }
+    }
+
+    /**
+     * استخراج اسم النطاق (Domain) من الرابط للبحث عن ملف الـ Cookies المناسب
+     * مثال: https://www.pornhub.com/view_video.php -> pornhub.com
+     */
+    private fun extractDomain(url: String): String? {
+        return try {
+            val uri = URI(url)
+            uri.host?.removePrefix("www.")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * البحث عن ملف Cookies مطابق للنطاق
+     * يتوقع أن يكون اسم الملف مثل: pornhub.com.txt
+     */
+    private fun getCookieFileForDomain(domain: String?): File? {
+        if (domain.isNullOrBlank()) return null
+        
+        val cookieFile = File(cookiesDir, "$domain.txt")
+        return if (cookieFile.exists() && cookieFile.length() > 0) cookieFile else null
     }
 
     suspend fun analyzeUrl(url: String): Result<YtDlpVideoInfo> = withContext(Dispatchers.IO) {
@@ -96,8 +125,14 @@ class YtDlpEngine @Inject constructor(
             request.addOption("--dump-json")
             request.addOption("--no-warnings")
             request.addOption("--no-playlist")
+            
+            // إضافة دعم الـ Cookies الديناميكي
+            val domain = extractDomain(url)
+            val cookieFile = getCookieFileForDomain(domain)
+            if (cookieFile != null) {
+                request.addOption("--cookies=${cookieFile.absolutePath}")
+            }
 
-            // تمرير null للبارامترات الإضافية لتجنب أي تعارض
             val response = YoutubeDL.getInstance().execute(request, null, null)
             
             val videoInfo = json.decodeFromString<YtDlpVideoInfo>(response.out)
@@ -108,7 +143,6 @@ class YtDlpEngine @Inject constructor(
         }
     }
 
-    // تم حل الخطأ الثاني: استخدام callbackFlow بدلاً من flow للسماح بإرسال البيانات من الـ Callback
     fun downloadVideo(
         url: String,
         formatId: String,
@@ -121,13 +155,19 @@ class YtDlpEngine @Inject constructor(
         request.addOption("-f", formatId)
         request.addOption("-o", outputPath)
         request.addOption("--no-warnings")
+        
+        // إضافة دعم الـ Cookies الديناميكي
+        val domain = extractDomain(url)
+        val cookieFile = getCookieFileForDomain(domain)
+        if (cookieFile != null) {
+            request.addOption("--cookies=${cookieFile.absolutePath}")
+        }
 
         val processId = "Download_${System.currentTimeMillis()}"
 
         launch(Dispatchers.IO) {
             try {
                 YoutubeDL.getInstance().execute(request, processId) { progress, _, line ->
-                    // استخدام trySend بدلاً من emit داخل الـ Callback
                     trySend(DownloadProgress(progress.toInt(), line ?: "Downloading..."))
                 }
 
@@ -168,6 +208,13 @@ class YtDlpEngine @Inject constructor(
             request.addOption("--sub-format", "srt")
             request.addOption("--skip-download")
             request.addOption("-o", outputPath)
+            
+            // إضافة دعم الـ Cookies الديناميكي
+            val domain = extractDomain(url)
+            val cookieFile = getCookieFileForDomain(domain)
+            if (cookieFile != null) {
+                request.addOption("--cookies=${cookieFile.absolutePath}")
+            }
 
             YoutubeDL.getInstance().execute(request, null, null)
 
@@ -179,6 +226,52 @@ class YtDlpEngine @Inject constructor(
             }
         } catch (e: Exception) {
             Result.failure(Exception("Subtitle download failed: ${e.message}"))
+        }
+    }
+    
+    // ==========================================
+    // دوال إدارة ملفات الـ Cookies (للاستخدام من الـ ViewModel)
+    // ==========================================
+    
+    /**
+     * حفظ ملف Cookies جديد
+     * @param domainName اسم النطاق (مثال: pornhub.com)
+     * @param fileContent محتوى ملف الـ Cookies بصيغة Netscape
+     */
+    suspend fun saveCookieFile(domainName: String, fileContent: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val cleanDomain = domainName.removePrefix("www.").removePrefix("http://").removePrefix("https://").split("/").first()
+            val cookieFile = File(cookiesDir, "$cleanDomain.txt")
+            cookieFile.writeText(fileContent)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(Exception("فشل في حفظ ملف الـ Cookies: ${e.message}"))
+        }
+    }
+
+    /**
+     * الحصول على قائمة ملفات الـ Cookies المحفوظة
+     */
+    suspend fun getSavedCookieFiles(): List<Pair<String, File>> = withContext(Dispatchers.IO) {
+        cookiesDir.listFiles { file -> file.extension == "txt" }
+            ?.map { file -> Pair(file.nameWithoutExtension, file) }
+            ?: emptyList()
+    }
+
+    /**
+     * حذف ملف Cookies محدد
+     */
+    suspend fun deleteCookieFile(domainName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val cookieFile = File(cookiesDir, "$domainName.txt")
+            if (cookieFile.exists()) {
+                cookieFile.delete()
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("الملف غير موجود"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("فشل في حذف الملف: ${e.message}"))
         }
     }
 }
