@@ -17,10 +17,6 @@ class DownloadAiModelUseCase @Inject constructor(
         return try {
             var model = repository.getModelById(modelId)
             
-            // ==========================================
-            // التعديل الجديد: إضافة النموذج لقاعدة البيانات إذا لم يكن موجوداً
-            // هذا يحدث عند التحميل التلقائي للحزم الوسيطة (مثل fr-en)
-            // ==========================================
             if (model == null) {
                 val modelInfo = modelManager.getAllModels().find { it.id == modelId }
                     ?: return Result.failure(Exception("لم يتم العثور على النموذج في قائمة النماذج المتاحة."))
@@ -43,16 +39,13 @@ class DownloadAiModelUseCase @Inject constructor(
                     )
                 )
                 
-                // جلب النموذج المضاف حديثاً
                 model = repository.getModelById(modelId)
             }
-            // ==========================================
 
             if (model == null) {
                 return Result.failure(Exception("فشل في إضافة النموذج إلى قاعدة البيانات."))
             }
 
-            // التأكد من إزالة حالة الإيقاف المؤقت عند بدء أو استئناف التحميل
             repository.updateDownloadState(
                 id = modelId,
                 isDownloaded = false,
@@ -75,12 +68,14 @@ class DownloadAiModelUseCase @Inject constructor(
                 },
                 onFailure = { error ->
                     val isPaused = error.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
+                    
+                    // التصحيح: إضافة "Socket closed" هنا أيضاً
                     val isCancelled = error is java.util.concurrent.CancellationException || 
                                       error.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true ||
-                                      error.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
+                                      error.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true ||
+                                      error.message?.contains("Socket closed", ignoreCase = true) == true
 
                     if (isPaused) {
-                        // في حالة الإيقاف المؤقت، نحتفظ بالملف ونحدث الحالة فقط
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
@@ -89,7 +84,6 @@ class DownloadAiModelUseCase @Inject constructor(
                         )
                         Result.failure(Exception("تم إيقاف التحميل مؤقتاً"))
                     } else if (isCancelled) {
-                        // في حالة الإلغاء، نمسح الحالة المؤقتة
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
@@ -99,7 +93,6 @@ class DownloadAiModelUseCase @Inject constructor(
                         )
                         Result.failure(Exception("تم إلغاء التحميل"))
                     } else {
-                        // في حالة الخطأ الفعلي، نعتبر الملف تالفاً
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
@@ -112,9 +105,11 @@ class DownloadAiModelUseCase @Inject constructor(
             )
         } catch (e: Exception) {
             val isPaused = e.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
+            
             val isCancelled = e is java.util.concurrent.CancellationException || 
                               e.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true ||
-                              e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
+                              e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true ||
+                              e.message?.contains("Socket closed", ignoreCase = true) == true
             
             if (isPaused) {
                 repository.updateDownloadState(
@@ -159,11 +154,11 @@ class DownloadAiModelUseCase @Inject constructor(
             message.contains("تم إيقاف التحميل مؤقتاً", ignoreCase = true) || message.contains("PAUSE_REQUESTED", ignoreCase = true) -> 
                 "تم إيقاف التحميل مؤقتاً."
             
-            message.contains("تم إلغاء التحميل", ignoreCase = true) || message.contains("CANCEL_REQUESTED", ignoreCase = true) -> 
+            message.contains("تم إلغاء التحميل", ignoreCase = true) || message.contains("CANCEL_REQUESTED", ignoreCase = true) || message.contains("Socket closed", ignoreCase = true) -> 
                 "تم إلغاء التحميل."
             
             message.contains("requires pivot translation", ignoreCase = true) || message.contains("cannot be downloaded directly", ignoreCase = true) -> 
-                "هذا النموذج يعتمد على الترجمة المتتابعة. يرجى تحميل الحزم الأساسية (مثل: من المصدر إلى الإنجليزية، ثم من الإنجليزية إلى العربية) بشكل منفصل."
+                "هذا النموذج يعتمد على الترجمة المتتابعة. يرجى تحميل الحزم الأساسية بشكل منفصل."
             
             message.contains("HTTP") -> 
                 "فشل التنزيل: تأكد من صحة الرابط أو توفر خادم النماذج."
