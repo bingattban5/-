@@ -513,7 +513,7 @@ class DownloadWorker @AssistedInject constructor(
 
     private fun createNotification(progress: Int, text: String): Notification {
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("SubVIDD Download")
+            .setContentTitle("تحميل الفيديو و الترجمة")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, progress == 0)
