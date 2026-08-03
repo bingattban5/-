@@ -164,7 +164,8 @@ class YtDlpEngine @Inject constructor(
             } else {
                 Result.failure(Exception("Subtitle file was not created."))
             }
-        } catch (e: Exception) {
+                } catch (e: Exception) {
             Result.failure(Exception("Subtitle download failed: ${e.message}"))
         }
     }
+}
