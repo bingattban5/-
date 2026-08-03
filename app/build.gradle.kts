@@ -98,9 +98,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-        // سحب أحدث نسخة مستقرة مباشرة من المستودع لتجاوز خطأ الإصدارات
-    implementation("com.github.yausername.youtubedl-android:library:master-SNAPSHOT")
-    implementation("com.github.yausername.youtubedl-android:ffmpeg:master-SNAPSHOT")
+      // استخدام الإصدار 0.14.2 المستقر والمضمون تواجده على سيرفرات JitPack
+    implementation("com.github.yausername.youtubedl-android:library:0.14.2")
+    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.14.2")
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
