@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -70,7 +71,7 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun AgonAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // تم تعطيله لضمان استخدام ألواننا المخصصة
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -93,7 +94,7 @@ fun AgonAppTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = Typography(), // الآن سيتم استخدام Typography الصحيح من Material3
         content = content
     )
 }
