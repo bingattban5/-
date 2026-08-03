@@ -95,6 +95,8 @@ data class AiModel(
     val downloadUrl: String,
     val description: String,
     val language: String?,
+    val isPaused: Boolean = false,       // تمت الإضافة: لتتبع حالة الإيقاف المؤقت
+    val downloadedBytes: Long = 0L,      // تمت الإضافة: لتتبع حجم ما تم تحميله للاستئناف
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long? = null
 )
