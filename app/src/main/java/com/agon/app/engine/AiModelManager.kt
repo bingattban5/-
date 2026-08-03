@@ -320,8 +320,8 @@ class AiModelManager @Inject constructor(
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
-                            // التحقق مما إذا تم قطع الاتصال بسبب طلب الإلغاء
-                            if (!connection.connected) {
+                            // التصحيح: التحقق مما إذا تم إزالة النموذج من قائمة التحميل النشط (بسبب الإلغاء)
+                            if (!activeDownloads.containsKey(modelId)) {
                                 throw java.io.IOException("تم إلغاء التحميل يدوياً")
                             }
                             appendOutput.write(buffer, 0, bytesRead)
@@ -335,8 +335,8 @@ class AiModelManager @Inject constructor(
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
-                            // التحقق مما إذا تم قطع الاتصال بسبب طلب الإلغاء
-                            if (!connection.connected) {
+                            // التصحيح: التحقق مما إذا تم إزالة النموذج من قائمة التحميل النشط (بسبب الإلغاء)
+                            if (!activeDownloads.containsKey(modelId)) {
                                 throw java.io.IOException("تم إلغاء التحميل يدوياً")
                             }
                             output.write(buffer, 0, bytesRead)
@@ -367,9 +367,10 @@ class AiModelManager @Inject constructor(
                 tempFile.delete()
             }
             
+            // التصحيح: التحقق من رسالة الخطأ لتحديد ما إذا كان السبب هو الإلغاء
             val isCanceled = e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true || 
                              e.message?.contains("Canceled", ignoreCase = true) == true ||
-                             (connection != null && !connection.connected)
+                             e.message?.contains("stream closed", ignoreCase = true) == true // نتيجة طبيعية لـ disconnect()
                              
             if (isCanceled) {
                 Result.failure(Exception("تم إلغاء التحميل"))
@@ -389,7 +390,7 @@ class AiModelManager @Inject constructor(
     fun cancelDownload(modelId: String) {
         val connection = activeDownloads.remove(modelId)
         if (connection != null) {
-            // قطع الاتصال سيؤدي إلى رمي استثناء داخل حلقة القراءة، مما يوقف التحميل فوراً
+            // قطع الاتصال سيؤدي إلى رمي استثناء (Stream closed) داخل حلقة القراءة، مما يوقف التحميل فوراً
             connection.disconnect()
         }
         
