@@ -261,7 +261,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Key,
                     iconTint = PastelOrange,
                     title = "إضافة ملف Cookies جديد",
-                    subtitle = "يتجاوز التحقق من العمر ويسمح بتنزيل الفيديوهات المحمية",
+                    subtitle = "للوصول أكثر",
                     onClick = { cookiePickerLauncher.launch("text/plain") }
                 )
                 
