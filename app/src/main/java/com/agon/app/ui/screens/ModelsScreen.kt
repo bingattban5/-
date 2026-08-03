@@ -81,7 +81,6 @@ fun ModelsScreen(
     val tabs = listOf("محرك الاستخراج", "نماذج Whisper", "حزم الترجمة")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Header
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -106,7 +105,6 @@ fun ModelsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
-            // Storage usage (Glass Card)
             GlassCard(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 elevation = 2.dp
@@ -139,7 +137,6 @@ fun ModelsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // الرسائل والتنبيهات
         AnimatedVisibility(
             visible = uiState.errorMessage != null || uiState.successMessage != null,
             enter = fadeIn(),
@@ -188,7 +185,6 @@ fun ModelsScreen(
             }
         }
 
-        // Tabs: Glowing Indicator
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -246,7 +242,6 @@ fun ModelsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Tab Content
         when (uiState.selectedTab) {
             0 -> YtDlpSection(
                 engine = uiState.ytDlpEngine,
@@ -419,14 +414,12 @@ private fun AiModelCard(
     onPause: () -> Unit,
     onResume: () -> Unit
 ) {
-    // حساب التقدم الحالي
     val currentProgress = downloadProgress ?: if (model.isPaused && model.sizeBytes > 0) {
         ((model.downloadedBytes.toFloat() / model.sizeBytes) * 100).toInt().coerceIn(0, 100)
     } else {
         null
     }
 
-    // حالة الخطأ: بطاقة بحدود حمراء شفافة (Tinted Red)
     if (model.isCorrupted) {
         GlassCard(
             modifier = Modifier
@@ -461,11 +454,9 @@ private fun AiModelCard(
         return
     }
 
-    // الحالة الطبيعية أو قيد التحميل
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                // أيقونة النموذج بخلفية باستيل ناعمة (Pastel)
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -488,7 +479,6 @@ private fun AiModelCard(
                     Text(text = model.sizeFormatted, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                // زر التحميل الدائري المتحول (يتحول من أيقونة سحابة إلى شريط تقدم دائري)
                 CircularProgressDownloadButton(
                     progress = currentProgress,
                     onClick = {
@@ -498,7 +488,6 @@ private fun AiModelCard(
                 )
             }
 
-            // أزرار التحكم الإضافية عند التحميل أو الإيقاف المؤقت
             if (currentProgress != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -535,7 +524,6 @@ private fun AiModelCard(
                     }
                 }
             } else if (model.isDownloaded) {
-                // زر الحذف للنماذج المحملة
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     OutlinedButton(
                         onClick = onDelete,
