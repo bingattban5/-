@@ -1,7 +1,6 @@
 package com.agon.app.engine
 
 import android.content.Context
-import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -25,16 +24,26 @@ data class FFmpegProgress(
 class FFmpegEngine @Inject constructor(
     private val context: Context
 ) {
-    // التعديل الجذري: توجيه المسار إلى مجلد المكتبات الأصلية للتحايل على قيود أندرويد الحديثة وتجنب خطأ 13
-    private val ffmpegBinary: File by lazy {
+    // دالة ذكية للبحث عن مسار الأدوات سواء كانت مستخرجة من المكتبة أو مضمنة في النظام
+    private fun getExecutable(name: String): File {
+        // 1. البحث في مجلدات المكتبة الرسمية (مسار الاستخراج التلقائي)
+        val libraryDir = File(context.noBackupFilesDir, "youtubedl-android")
+        if (libraryDir.exists()) {
+            val extractedFile = libraryDir.walkTopDown().firstOrNull { 
+                it.name == name || it.name == "lib${name}.so" 
+            }
+            if (extractedFile != null && extractedFile.exists()) {
+                return extractedFile
+            }
+        }
+
+        // 2. المسار الاحتياطي القديم
         val nativeDir = context.applicationInfo.nativeLibraryDir
-        File(nativeDir, "libffmpeg.so")
+        return File(nativeDir, "lib${name}.so")
     }
 
-    private val ffprobeBinary: File by lazy {
-        val nativeDir = context.applicationInfo.nativeLibraryDir
-        File(nativeDir, "libffprobe.so")
-    }
+    private val ffmpegBinary: File by lazy { getExecutable("ffmpeg") }
+    private val ffprobeBinary: File by lazy { getExecutable("ffprobe") }
 
     fun isFFmpegInstalled(): Boolean {
         return ffmpegBinary.exists()
@@ -44,13 +53,12 @@ class FFmpegEngine @Inject constructor(
         return ffprobeBinary.exists()
     }
 
-    // بما أن الملفات أصبحت جزءاً من مجلد jniLibs، يتم استخراجها تلقائياً بواسطة نظام أندرويد عند التثبيت
     suspend fun installFFmpeg(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (isFFmpegInstalled() && isFFprobeInstalled()) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("CRITICAL: 'libffmpeg.so' or 'libffprobe.so' not found in native library directory. Please ensure they are placed in app/src/main/jniLibs/"))
+                Result.failure(Exception("CRITICAL: FFmpeg binaries not found. Make sure FFmpeg.getInstance().init(this) was called in Application class."))
             }
         } catch (e: Exception) {
             Result.failure(Exception("Failed to verify FFmpeg installation: ${e.message}"))
