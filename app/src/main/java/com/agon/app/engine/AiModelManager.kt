@@ -9,6 +9,7 @@ import java.security.MessageDigest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * AI Model Manager for Whisper and Argos Translate models
@@ -25,6 +26,9 @@ class AiModelManager @Inject constructor(
     private val tempDir: File by lazy {
         File(context.cacheDir, "model_downloads").apply { mkdirs() }
     }
+
+    // خريطة لتتبع اتصالات التحميل النشطة لتمكين خاصية الإلغاء
+    private val activeDownloads = ConcurrentHashMap<String, java.net.HttpURLConnection>()
 
     data class ModelInfo(
         val id: String,
@@ -263,6 +267,7 @@ class AiModelManager @Inject constructor(
         modelId: String,
         onProgress: (Int, Long, Long) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
+        var connection: java.net.HttpURLConnection? = null
         try {
             val modelInfo = getAllModels().find { it.id == modelId }
                 ?: return@withContext Result.failure(Exception("Model not found in the list"))
@@ -282,9 +287,13 @@ class AiModelManager @Inject constructor(
 
             val downloadedBytes = if (tempFile.exists()) tempFile.length() else 0L
             
-            val connection = java.net.URL(modelInfo.downloadUrl).openConnection() as java.net.HttpURLConnection
+            connection = java.net.URL(modelInfo.downloadUrl).openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 30_000
             connection.readTimeout = 30_000
+            
+            // تسجيل الاتصال النشط لتمكين الإلغاء
+            activeDownloads[modelId] = connection
+            
             if (downloadedBytes > 0) {
                 connection.setRequestProperty("Range", "bytes=$downloadedBytes-")
             }
@@ -306,22 +315,30 @@ class AiModelManager @Inject constructor(
             var currentBytes = downloadedBytes
 
             connection.inputStream.use { input ->
-                tempFile.outputStream().use { output ->
-                    if (downloadedBytes > 0) {
-                        java.io.FileOutputStream(tempFile, true).use { appendOutput ->
-                            val buffer = ByteArray(8192)
-                            var bytesRead: Int
-                            while (input.read(buffer).also { bytesRead = it } != -1) {
-                                appendOutput.write(buffer, 0, bytesRead)
-                                currentBytes += bytesRead
-                                val progress = ((currentBytes.toFloat() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                onProgress(progress, currentBytes, totalBytes)
-                            }
-                        }
-                    } else {
+                if (downloadedBytes > 0) {
+                    java.io.FileOutputStream(tempFile, true).use { appendOutput ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
+                            // التحقق مما إذا تم قطع الاتصال بسبب طلب الإلغاء
+                            if (!connection.connected) {
+                                throw java.io.IOException("تم إلغاء التحميل يدوياً")
+                            }
+                            appendOutput.write(buffer, 0, bytesRead)
+                            currentBytes += bytesRead
+                            val progress = ((currentBytes.toFloat() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                            onProgress(progress, currentBytes, totalBytes)
+                        }
+                    }
+                } else {
+                    tempFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            // التحقق مما إذا تم قطع الاتصال بسبب طلب الإلغاء
+                            if (!connection.connected) {
+                                throw java.io.IOException("تم إلغاء التحميل يدوياً")
+                            }
                             output.write(buffer, 0, bytesRead)
                             currentBytes += bytesRead
                             val progress = ((currentBytes.toFloat() / totalBytes) * 100).toInt().coerceIn(0, 100)
@@ -344,7 +361,42 @@ class AiModelManager @Inject constructor(
 
             Result.success(finalFile)
         } catch (e: Exception) {
-            Result.failure(Exception("Download error for $modelId: ${e.message}"))
+            // تنظيف الملف المؤقت في حالة الفشل أو الإلغاء
+            val tempFile = File(tempDir, "$modelId.tmp")
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+            
+            val isCanceled = e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true || 
+                             e.message?.contains("Canceled", ignoreCase = true) == true ||
+                             (connection != null && !connection.connected)
+                             
+            if (isCanceled) {
+                Result.failure(Exception("تم إلغاء التحميل"))
+            } else {
+                Result.failure(Exception("Download error for $modelId: ${e.message}"))
+            }
+        } finally {
+            // إزالة الاتصال من القائمة النشطة دائماً لضمان عدم تسرب الذاكرة
+            activeDownloads.remove(modelId)
+            connection?.disconnect()
+        }
+    }
+
+    /**
+     * إلغاء تحميل نموذج قيد التحميل حالياً
+     */
+    fun cancelDownload(modelId: String) {
+        val connection = activeDownloads.remove(modelId)
+        if (connection != null) {
+            // قطع الاتصال سيؤدي إلى رمي استثناء داخل حلقة القراءة، مما يوقف التحميل فوراً
+            connection.disconnect()
+        }
+        
+        // حذف الملف المؤقت فوراً لتحرير مساحة التخزين
+        val tempFile = File(tempDir, "$modelId.tmp")
+        if (tempFile.exists()) {
+            tempFile.delete()
         }
     }
 
