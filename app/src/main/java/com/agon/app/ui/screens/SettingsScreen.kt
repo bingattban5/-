@@ -25,8 +25,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.DarkMode
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Settings
@@ -46,7 +49,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -82,19 +87,44 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var showSubtitleFormatDialog by remember { mutableStateOf(false) }
+    
+    // متغيرات خاصة بإدارة ملفات الـ Cookies
+    var showDomainDialog by remember { mutableStateOf(false) }
+    var pendingCookieContent by remember { mutableStateOf<String?>(null) }
+    var domainInput by remember { mutableStateOf("") }
 
     // Launcher لاختيار مجلد من ذاكرة الهاتف
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         uri?.let {
-            // منح الإذن الدائم للوصول لهذا المجلد حتى بعد إعادة تشغيل الجهاز
             context.contentResolver.takePersistableUriPermission(
                 it,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
-            // حفظ مسار المجلد (كـ URI String) في الإعدادات
             viewModel.setSavePath(it.toString())
+        }
+    }
+
+    // Launcher لاختيار ملف Cookies (.txt)
+    val cookiePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val content = try {
+                context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader ->
+                    reader.readText()
+                }
+            } catch (e: Exception) {
+                null
+            }
+            
+            if (!content.isNullOrBlank()) {
+                pendingCookieContent = content
+                // محاولة تخمين اسم النطاق من اسم الملف
+                domainInput = it.lastPathSegment?.substringBefore(".txt") ?: ""
+                showDomainDialog = true
+            }
         }
     }
 
@@ -192,6 +222,97 @@ fun SettingsScreen(
                         value = subtitleFormat.uppercase(),
                         onClick = { showSubtitleFormatDialog = true }
                     )
+                }
+            }
+        }
+
+        // Cookies Section (الجديد)
+        item {
+            SectionHeader(title = "ملفات المصادقة (Cookies)", icon = Icons.Filled.Key)
+        }
+
+        item {
+            SettingsCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { cookiePickerLauncher.launch("text/plain") }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "إضافة ملف Cookies جديد",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "يتجاوز التحقق من العمر ويسمح بتنزيل الفيديوهات المحمية",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    
+                    if (uiState.savedCookieFiles.isNotEmpty()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Text(
+                            text = "الملفات المحفوظة:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        uiState.savedCookieFiles.forEach { domain ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        tint = SuccessGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = domain,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { viewModel.deleteCookieFile(domain) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = "حذف",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -402,6 +523,59 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showSubtitleFormatDialog = false }) {
                     Text("إغلاق")
+                }
+            }
+        )
+    }
+
+    // Domain Input Dialog for Cookies
+    if (showDomainDialog && pendingCookieContent != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showDomainDialog = false
+                pendingCookieContent = null
+                domainInput = ""
+            },
+            title = { Text("اسم النطاق (Domain)", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "أدخل اسم الموقع الذي ينتمي إليه هذا الملف (مثال: pornhub.com)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = domainInput,
+                        onValueChange = { domainInput = it },
+                        label = { Text("اسم النطاق") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (domainInput.isNotBlank()) {
+                            viewModel.saveCookieFile(domainInput.trim(), pendingCookieContent!!)
+                            showDomainDialog = false
+                            pendingCookieContent = null
+                            domainInput = ""
+                        }
+                    },
+                    enabled = domainInput.isNotBlank()
+                ) {
+                    Text("حفظ")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDomainDialog = false
+                    pendingCookieContent = null
+                    domainInput = ""
+                }) {
+                    Text("إلغاء")
                 }
             }
         )
