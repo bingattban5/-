@@ -2,9 +2,11 @@ package com.agon.app.engine
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -72,7 +74,8 @@ class YtDlpEngine @Inject constructor(
 
     suspend fun getVersion(): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val version = YoutubeDL.getInstance().version()
+            // تم حل الخطأ الأول: تمرير الـ context لدالة version
+            val version = YoutubeDL.getInstance().version(context)
             Result.success(version ?: "Unknown")
         } catch (e: Exception) {
             Result.failure(Exception("Failed to get version: ${e.message}"))
@@ -94,7 +97,8 @@ class YtDlpEngine @Inject constructor(
             request.addOption("--no-warnings")
             request.addOption("--no-playlist")
 
-            val response = YoutubeDL.getInstance().execute(request)
+            // تمرير null للبارامترات الإضافية لتجنب أي تعارض
+            val response = YoutubeDL.getInstance().execute(request, null, null)
             
             val videoInfo = json.decodeFromString<YtDlpVideoInfo>(response.out)
             Result.success(videoInfo)
@@ -104,11 +108,12 @@ class YtDlpEngine @Inject constructor(
         }
     }
 
+    // تم حل الخطأ الثاني: استخدام callbackFlow بدلاً من flow للسماح بإرسال البيانات من الـ Callback
     fun downloadVideo(
         url: String,
         formatId: String,
         outputPath: String
-    ): Flow<DownloadProgress> = flow {
+    ): Flow<DownloadProgress> = callbackFlow {
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
 
@@ -117,19 +122,33 @@ class YtDlpEngine @Inject constructor(
         request.addOption("-o", outputPath)
         request.addOption("--no-warnings")
 
-        try {
-            YoutubeDL.getInstance().execute(request, "VideoDownloadTask") { progress, _, line ->
-                emit(DownloadProgress(progress.toInt(), line ?: "Downloading..."))
-            }
+        val processId = "Download_${System.currentTimeMillis()}"
 
-            if (outputFile.exists()) {
-                emit(DownloadProgress(100, "Download completed"))
-            } else {
-                throw Exception("Output file was not created. Path: $outputPath")
+        launch(Dispatchers.IO) {
+            try {
+                YoutubeDL.getInstance().execute(request, processId) { progress, _, line ->
+                    // استخدام trySend بدلاً من emit داخل الـ Callback
+                    trySend(DownloadProgress(progress.toInt(), line ?: "Downloading..."))
+                }
+
+                if (outputFile.exists()) {
+                    trySend(DownloadProgress(100, "Download completed"))
+                } else {
+                    close(Exception("Output file was not created. Path: $outputPath"))
+                }
+                close()
+            } catch (e: Exception) {
+                trySend(DownloadProgress(-1, "Error: ${e.message}"))
+                close(e)
             }
-        } catch (e: Exception) {
-            emit(DownloadProgress(-1, "Error: ${e.message}"))
-            throw e
+        }
+
+        awaitClose {
+            try {
+                YoutubeDL.getInstance().destroyProcessById(processId)
+            } catch (e: Exception) {
+                // تجاهل أخطاء الإلغاء
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -150,7 +169,7 @@ class YtDlpEngine @Inject constructor(
             request.addOption("--skip-download")
             request.addOption("-o", outputPath)
 
-            YoutubeDL.getInstance().execute(request)
+            YoutubeDL.getInstance().execute(request, null, null)
 
             val srtFile = File(outputPath.replace("%(ext)s", "srt"))
             if (srtFile.exists()) {
