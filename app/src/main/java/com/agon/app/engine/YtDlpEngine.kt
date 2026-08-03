@@ -62,12 +62,10 @@ class YtDlpEngine @Inject constructor(
         isLenient = true
     }
 
-    // تُرجع true دائماً لأن المكتبة تتكفل بتثبيت وتهيئة الأداة أثناء تشغيل التطبيق
     fun isYtDlpInstalled(): Boolean {
         return true 
     }
 
-    // أبقينا على الدالة لكي لا تتعطل باقي الأكواد التي تستدعيها، وتُرجع نجاحاً مباشراً
     suspend fun installYtDlp(): Result<Unit> = withContext(Dispatchers.IO) {
         Result.success(Unit)
     }
@@ -91,16 +89,13 @@ class YtDlpEngine @Inject constructor(
                 return@withContext Result.failure(Exception("Invalid URL - must start with http:// or https://"))
             }
 
-            // بناء الطلب باستخدام فئة YoutubeDLRequest الخاصة بالمكتبة
             val request = YoutubeDLRequest(url)
             request.addOption("--dump-json")
             request.addOption("--no-warnings")
             request.addOption("--no-playlist")
 
-            // تنفيذ الطلب
             val response = YoutubeDL.getInstance().execute(request)
             
-            // قراءة المخرجات وتحويلها إلى كائن البيانات
             val videoInfo = json.decodeFromString<YtDlpVideoInfo>(response.out)
             Result.success(videoInfo)
             
@@ -123,8 +118,7 @@ class YtDlpEngine @Inject constructor(
         request.addOption("--no-warnings")
 
         try {
-            // نمرر id للتاسك لتتبع نسبة التحميل
-            YoutubeDL.getInstance().execute(request, "VideoDownloadTask") { progress, etaInSeconds, line ->
+            YoutubeDL.getInstance().execute(request, "VideoDownloadTask") { progress, _, line ->
                 emit(DownloadProgress(progress.toInt(), line ?: "Downloading..."))
             }
 
@@ -164,7 +158,7 @@ class YtDlpEngine @Inject constructor(
             } else {
                 Result.failure(Exception("Subtitle file was not created."))
             }
-                } catch (e: Exception) {
+        } catch (e: Exception) {
             Result.failure(Exception("Subtitle download failed: ${e.message}"))
         }
     }
