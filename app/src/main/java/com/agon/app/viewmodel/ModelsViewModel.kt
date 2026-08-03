@@ -113,9 +113,15 @@ class ModelsViewModel @Inject constructor(
                     loadStorageUsage()
                 },
                 onFailure = { error ->
+                    val msg = error.message ?: "حدث خطأ أثناء تحميل النموذج"
+                    val isPaused = msg.contains("إيقاف التحميل مؤقتاً", ignoreCase = true) || msg.contains("PAUSE_REQUESTED", ignoreCase = true)
+                    val isCancelled = msg.contains("إلغاء التحميل", ignoreCase = true) || msg.contains("CANCEL_REQUESTED", ignoreCase = true)
+
                     _uiState.value = _uiState.value.copy(
                         downloadingModels = _uiState.value.downloadingModels - modelId,
-                        errorMessage = error.message ?: "حدث خطأ أثناء تحميل النموذج"
+                        // إذا كان إيقافاً مؤقتاً أو إلغاءً، نعتبرها رسالة نجاح/معلومة وليست خطأ أحمر
+                        successMessage = if (isPaused || isCancelled) msg else null,
+                        errorMessage = if (!isPaused && !isCancelled) msg else null
                     )
                 }
             )
@@ -123,21 +129,34 @@ class ModelsViewModel @Inject constructor(
     }
 
     // ==========================================
-    // الدالة الجديدة لإلغاء التحميل
+    // دالة إيقاف التحميل مؤقتاً
+    // ==========================================
+    fun pauseDownload(modelId: String) {
+        viewModelScope.launch {
+            // استدعاء دالة الإيقاف في طبقة الـ UseCase
+            // ملاحظة: كوروتين التحميل الحالي (downloadModel) سيلتقط استثناء الإيقاف 
+            // ويقوم تلقائياً بتحديث الواجهة وإزالة النموذج من خريطة downloadingModels
+            downloadAiModelUseCase.pauseDownload(modelId)
+        }
+    }
+
+    // ==========================================
+    // دالة استئناف التحميل
+    // ==========================================
+    fun resumeDownload(modelId: String) {
+        // الاستئناف هو ببساطة إعادة استدعاء دالة التحميل.
+        // الـ UseCase والـ Manager سيتعرفان تلقائياً على وجود الملف المؤقت (.tmp)
+        // وسيقومان بإرسال طلب Range لاستكمال التحميل من حيث توقف.
+        downloadModel(modelId)
+    }
+
+    // ==========================================
+    // دالة إلغاء التحميل نهائياً
     // ==========================================
     fun cancelDownload(modelId: String) {
         viewModelScope.launch {
-            // 1. تحديث الواجهة فوراً لإخفاء شريط التقدم
-            _uiState.value = _uiState.value.copy(
-                downloadingModels = _uiState.value.downloadingModels - modelId,
-                successMessage = "تم إلغاء تحميل النموذج"
-            )
-            
-            // 2. استدعاء دالة الإلغاء في طبقة الـ UseCase
-            // ملاحظة هامة: لكي يتوقف التحميل الفعلي في الخلفية، يجب أن تحتوي 
-            // فئة DownloadAiModelUseCase (أو الـ Repository التابع لها) على دالة للإلغاء.
-            // سأقوم بتعديلها لك بمجرد إرسالك لكود الـ UseCase.
             downloadAiModelUseCase.cancelDownload(modelId)
+            // ملاحظة: كوروتين التحميل الحالي سيلتقط استثناء الإلغاء ويقوم بتحديث الواجهة تلقائياً
         }
     }
     // ==========================================
