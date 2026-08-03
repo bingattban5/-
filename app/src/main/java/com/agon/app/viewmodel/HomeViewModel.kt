@@ -145,73 +145,101 @@ class HomeViewModel @Inject constructor(
     }
 
     fun startSpecificDownload(mode: DownloadMode, method: SubtitleMethod) {
-        val state = _uiState.value
-        val videoInfo = state.videoInfo ?: return
-        val quality = state.selectedQuality ?: return
-
         viewModelScope.launch {
-            val downloadId = UUID.randomUUID().toString()
-            val downloadDir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "SubVIDD"
-            )
-            downloadDir.mkdirs()
+            try {
+                val state = _uiState.value
+                val videoInfo = state.videoInfo ?: throw IllegalStateException("معلومات الفيديو غير متوفرة")
+                val quality = state.selectedQuality ?: throw IllegalStateException("لم يتم اختيار الجودة")
 
-            val videoFileName = "${videoInfo.title.replace(Regex("[^a-zA-Z0-9\\u0600-\\u06FF]"), "_")}.${quality.format}"
-            val outputPath = File(downloadDir, videoFileName).absolutePath
-
-            val subtitleLang = if (method == SubtitleMethod.TRANSLATED_FROM_OTHER) {
-                videoInfo.availableSubtitles.firstOrNull { it.languageCode != "ar" }?.languageCode ?: "en"
-            } else {
-                ""
-            }
-
-            val downloadItem = DownloadItem(
-                id = downloadId,
-                url = state.url,
-                title = videoInfo.title,
-                thumbnailUrl = videoInfo.thumbnailUrl,
-                selectedQuality = quality.label,
-                downloadMode = mode,
-                subtitleMethod = method,
-                status = DownloadStatus.QUEUED,
-                totalSize = quality.fileSize,
-                videoFilePath = if (mode != DownloadMode.SUBTITLE_ONLY) outputPath else "",
-                srtFilePath = if (mode != DownloadMode.VIDEO_ONLY) outputPath.replaceAfterLast('.', "srt") else "",
-                timestamp = System.currentTimeMillis()
-            )
-
-            addDownloadUseCase(downloadItem)
-
-            val workData = Data.Builder()
-                .putString(DownloadWorker.KEY_URL, state.url)
-                .putString(DownloadWorker.KEY_FORMAT_ID, quality.id)
-                .putString(DownloadWorker.KEY_OUTPUT_PATH, outputPath)
-                .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
-                .putInt(DownloadWorker.KEY_NOTIFICATION_ID, downloadId.hashCode())
-                .putString(DownloadWorker.KEY_DOWNLOAD_MODE, mode.name)
-                .putString(DownloadWorker.KEY_SUBTITLE_METHOD, method.name)
-                .putString(DownloadWorker.KEY_SUBTITLE_LANG, subtitleLang)
-                .build()
-
-            val downloadWorkRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                .setInputData(workData)
-                .build()
-
-            WorkManager.getInstance(getApplication()).enqueue(downloadWorkRequest)
-            downloadRepository.updateDownload(downloadItem.copy(workManagerId = downloadWorkRequest.id.toString()))
-
-            val message = when (mode) {
-                DownloadMode.VIDEO_ONLY -> "بدأ تحميل الفيديو وتمت إضافته للتنزيلات"
-                DownloadMode.SUBTITLE_ONLY -> when (method) {
-                    SubtitleMethod.WHISPER_GENERATED -> "جاري إنشاء الترجمة بالذكاء الاصطناعي وإضافتها للتنزيلات"
-                    SubtitleMethod.TRANSLATED_FROM_OTHER -> "بدأت عملية ترجمة الترجمة وإضافتها للتنزيلات"
-                    else -> "بدأ تحميل الترجمة المباشرة"
+                val downloadId = UUID.randomUUID().toString()
+                val downloadDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "SubVIDD"
+                )
+                if (!downloadDir.exists()) {
+                    downloadDir.mkdirs()
                 }
-                else -> "بدأ التحميل..."
-            }
 
-            _uiState.value = _uiState.value.copy(successMessage = message)
+                // تنظيف العنوان من الرموز الممنوعة في أنظمة الملفات وتقليصه لتجنب الأخطاء
+                val cleanTitle = videoInfo.title
+                    .replace(Regex("[^a-zA-Z0-9\\u0600-\\u06FF\\s]"), "_")
+                    .replace(Regex("\\s+"), "_")
+                    .take(50)
+                
+                val format = quality.format.ifEmpty { "mp4" }
+                val videoFileName = "${cleanTitle}.${format}"
+                val outputPath = File(downloadDir, videoFileName).absolutePath
+
+                val subtitleLang = if (method == SubtitleMethod.TRANSLATED_FROM_OTHER) {
+                    videoInfo.availableSubtitles.firstOrNull { it.languageCode != "ar" }?.languageCode ?: "en"
+                } else {
+                    ""
+                }
+
+                val srtPath = if (mode != DownloadMode.VIDEO_ONLY) {
+                    if (outputPath.contains(".")) outputPath.replaceAfterLast('.', "srt") else "$outputPath.srt"
+                } else ""
+
+                val downloadItem = DownloadItem(
+                    id = downloadId,
+                    url = state.url,
+                    title = videoInfo.title,
+                    thumbnailUrl = videoInfo.thumbnailUrl,
+                    selectedQuality = quality.label,
+                    downloadMode = mode,
+                    subtitleMethod = method,
+                    status = DownloadStatus.QUEUED,
+                    totalSize = quality.fileSize,
+                    videoFilePath = if (mode != DownloadMode.SUBTITLE_ONLY) outputPath else "",
+                    srtFilePath = srtPath,
+                    timestamp = System.currentTimeMillis()
+                )
+
+                addDownloadUseCase(downloadItem)
+
+                val workData = Data.Builder()
+                    .putString(DownloadWorker.KEY_URL, state.url)
+                    .putString(DownloadWorker.KEY_FORMAT_ID, quality.id)
+                    .putString(DownloadWorker.KEY_OUTPUT_PATH, outputPath)
+                    .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
+                    .putInt(DownloadWorker.KEY_NOTIFICATION_ID, downloadId.hashCode())
+                    .putString(DownloadWorker.KEY_DOWNLOAD_MODE, mode.name)
+                    .putString(DownloadWorker.KEY_SUBTITLE_METHOD, method.name)
+                    .putString(DownloadWorker.KEY_SUBTITLE_LANG, subtitleLang)
+                    .build()
+
+                val downloadWorkRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setInputData(workData)
+                    .build()
+
+                // التحقق من تهيئة WorkManager والتقاط الخطأ إذا لم يكن مهيأً
+                val workManager = try {
+                    WorkManager.getInstance(getApplication())
+                } catch (e: IllegalStateException) {
+                    throw IllegalStateException("WorkManager غير مهيأ في التطبيق.")
+                }
+
+                workManager.enqueue(downloadWorkRequest)
+                downloadRepository.updateDownload(downloadItem.copy(workManagerId = downloadWorkRequest.id.toString()))
+
+                val message = when (mode) {
+                    DownloadMode.VIDEO_ONLY -> "بدأ تحميل الفيديو وتمت إضافته للتنزيلات"
+                    DownloadMode.SUBTITLE_ONLY -> when (method) {
+                        SubtitleMethod.WHISPER_GENERATED -> "جاري إنشاء الترجمة بالذكاء الاصطناعي"
+                        SubtitleMethod.TRANSLATED_FROM_OTHER -> "بدأت عملية ترجمة الترجمة"
+                        else -> "بدأ تحميل الترجمة المباشرة"
+                    }
+                    else -> "بدأ التحميل..."
+                }
+
+                _uiState.value = _uiState.value.copy(successMessage = message)
+
+            } catch (e: Exception) {
+                // التقاط أي خطأ وعرضه للمستخدم بدلاً من الانهيار
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "فشل بدء التحميل: ${e.localizedMessage ?: e.message ?: "خطأ غير معروف"}"
+                )
+            }
         }
     }
 
