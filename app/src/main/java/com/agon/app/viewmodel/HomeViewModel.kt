@@ -36,11 +36,11 @@ data class HomeUiState(
     val selectedMode: DownloadMode = DownloadMode.VIDEO_AND_SUBTITLE,
     val subtitleMethod: SubtitleMethod = SubtitleMethod.NONE,
     val errorMessage: String? = null,
-    val showBottomSheet: Boolean = false,
-    val isDownloading: Boolean = false,
-    val downloadProgress: Int = 0,
+    val isResultScreenVisible: Boolean = false,
+    val showExitDialog: Boolean = false,
+    val subtitleSearchStep: Int = 0,
     val analysisStep: String = "",
-    val cpuArch: String = "Android Native",
+    val cpuArch: String = "ARM 64-bit / Universal",
     val srtContent: String = "",
     val showSrtPreview: Boolean = false,
     val successMessage: String? = null
@@ -62,7 +62,6 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
-        // تعيين قيمة افتراضية للمعمارية بعد أن أصبحت المكتبة تديرها تلقائياً
         _uiState.value = _uiState.value.copy(
             cpuArch = "ARM 64-bit / Universal"
         )
@@ -89,37 +88,21 @@ class HomeViewModel @Inject constructor(
                 errorMessage = null,
                 analysisStep = "جاري تحليل الرابط...",
                 videoInfo = null,
-                showBottomSheet = false
+                isResultScreenVisible = false,
+                subtitleSearchStep = 0
             )
 
-            _uiState.value = _uiState.value.copy(analysisStep = "جلب معلومات الفيديو عبر yt-dlp...")
             val result = analyzeUrlUseCase(url)
 
             result.onSuccess { info ->
-                _uiState.value = _uiState.value.copy(
-                    analysisStep = "فحص الترجمات المتاحة..."
-                )
-
                 val method = determineSubtitleMethodUseCase(info.availableSubtitles)
-
-                _uiState.value = _uiState.value.copy(
-                    analysisStep = "تحديد طريقة الترجمة..."
-                )
-
-                val methodDescription = when (method) {
-                    SubtitleMethod.DIRECT_AR -> "✓ ترجمة عربية متاحة - تحميل مباشر"
-                    SubtitleMethod.TRANSLATED_FROM_OTHER -> "⟳ ترجمة متاحة بغير العربية - سيتم الترجمة عبر Argos"
-                    SubtitleMethod.WHISPER_GENERATED -> "⚡ لا توجد ترجمة - سيتم توليدها عبر Whisper AI"
-                    SubtitleMethod.NONE -> "✗ لا يمكن استخراج الترجمة"
-                }
 
                 _uiState.value = _uiState.value.copy(
                     isAnalyzing = false,
                     videoInfo = info,
                     subtitleMethod = method,
-                    showBottomSheet = true,
+                    isResultScreenVisible = true,
                     selectedQuality = info.qualities.firstOrNull(),
-                    analysisStep = methodDescription,
                     successMessage = "تم تحليل الرابط بنجاح"
                 )
             }
@@ -138,23 +121,33 @@ class HomeViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(selectedQuality = quality)
     }
 
-    fun dismissBottomSheet() {
-        _uiState.value = _uiState.value.copy(showBottomSheet = false)
+    fun onBackPressed() {
+        if (_uiState.value.isResultScreenVisible) {
+            _uiState.value = _uiState.value.copy(showExitDialog = true)
+        }
     }
 
-    fun startDownload() {
+    fun confirmExit() {
+        _uiState.value = _uiState.value.copy(
+            showExitDialog = false,
+            isResultScreenVisible = false,
+            videoInfo = null,
+            subtitleSearchStep = 0
+        )
+    }
+
+    fun dismissExitDialog() {
+        _uiState.value = _uiState.value.copy(showExitDialog = false)
+    }
+
+    fun performSubtitleSearch() {
+        _uiState.value = _uiState.value.copy(subtitleSearchStep = 1)
+    }
+
+    fun startSpecificDownload(mode: DownloadMode, method: SubtitleMethod) {
         val state = _uiState.value
         val videoInfo = state.videoInfo ?: return
         val quality = state.selectedQuality ?: return
-        val mode = state.selectedMode
-
-        // Validate mode selection
-        if (mode == DownloadMode.SUBTITLE_ONLY && state.subtitleMethod == SubtitleMethod.NONE) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "لا توجد ترجمات متاحة لهذا الفيديو"
-            )
-            return
-        }
 
         viewModelScope.launch {
             val downloadId = UUID.randomUUID().toString()
@@ -167,8 +160,7 @@ class HomeViewModel @Inject constructor(
             val videoFileName = "${videoInfo.title.replace(Regex("[^a-zA-Z0-9\\u0600-\\u06FF]"), "_")}.${quality.format}"
             val outputPath = File(downloadDir, videoFileName).absolutePath
 
-            // Determine subtitle language for translation
-            val subtitleLang = if (state.subtitleMethod == SubtitleMethod.TRANSLATED_FROM_OTHER) {
+            val subtitleLang = if (method == SubtitleMethod.TRANSLATED_FROM_OTHER) {
                 videoInfo.availableSubtitles.firstOrNull { it.languageCode != "ar" }?.languageCode ?: "en"
             } else {
                 ""
@@ -181,7 +173,7 @@ class HomeViewModel @Inject constructor(
                 thumbnailUrl = videoInfo.thumbnailUrl,
                 selectedQuality = quality.label,
                 downloadMode = mode,
-                subtitleMethod = state.subtitleMethod,
+                subtitleMethod = method,
                 status = DownloadStatus.QUEUED,
                 totalSize = quality.fileSize,
                 videoFilePath = if (mode != DownloadMode.SUBTITLE_ONLY) outputPath else "",
@@ -198,7 +190,7 @@ class HomeViewModel @Inject constructor(
                 .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
                 .putInt(DownloadWorker.KEY_NOTIFICATION_ID, downloadId.hashCode())
                 .putString(DownloadWorker.KEY_DOWNLOAD_MODE, mode.name)
-                .putString(DownloadWorker.KEY_SUBTITLE_METHOD, state.subtitleMethod.name)
+                .putString(DownloadWorker.KEY_SUBTITLE_METHOD, method.name)
                 .putString(DownloadWorker.KEY_SUBTITLE_LANG, subtitleLang)
                 .build()
 
@@ -207,23 +199,24 @@ class HomeViewModel @Inject constructor(
                 .build()
 
             WorkManager.getInstance(getApplication()).enqueue(downloadWorkRequest)
-
-            // Update download item with work manager ID
             downloadRepository.updateDownload(downloadItem.copy(workManagerId = downloadWorkRequest.id.toString()))
 
-            _uiState.value = _uiState.value.copy(
-                isDownloading = true,
-                downloadProgress = 0,
-                showBottomSheet = false,
-                successMessage = "بدأ التحميل..."
-            )
+            val message = when (mode) {
+                DownloadMode.VIDEO_ONLY -> "بدأ تحميل الفيديو وتمت إضافته للتنزيلات"
+                DownloadMode.SUBTITLE_ONLY -> when (method) {
+                    SubtitleMethod.WHISPER_GENERATED -> "جاري إنشاء الترجمة بالذكاء الاصطناعي وإضافتها للتنزيلات"
+                    SubtitleMethod.TRANSLATED_FROM_OTHER -> "بدأت عملية ترجمة الترجمة وإضافتها للتنزيلات"
+                    else -> "بدأ تحميل الترجمة المباشرة"
+                }
+                else -> "بدأ التحميل..."
+            }
+
+            _uiState.value = _uiState.value.copy(successMessage = message)
         }
     }
 
     fun toggleSrtPreview() {
-        _uiState.value = _uiState.value.copy(
-            showSrtPreview = !_uiState.value.showSrtPreview
-        )
+        _uiState.value = _uiState.value.copy(showSrtPreview = !_uiState.value.showSrtPreview)
     }
 
     fun clearError() {
@@ -235,8 +228,6 @@ class HomeViewModel @Inject constructor(
     }
 
     fun resetState() {
-        _uiState.value = HomeUiState(
-            cpuArch = _uiState.value.cpuArch
-        )
+        _uiState.value = HomeUiState(cpuArch = _uiState.value.cpuArch)
     }
 }
