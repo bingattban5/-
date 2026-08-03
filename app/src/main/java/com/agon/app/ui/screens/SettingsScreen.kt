@@ -1,5 +1,9 @@
 package com.agon.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -57,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -67,6 +72,7 @@ import com.agon.app.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val savePath by viewModel.savePath.collectAsState()
     val autoTranslate by viewModel.autoTranslate.collectAsState()
@@ -76,6 +82,28 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var showSubtitleFormatDialog by remember { mutableStateOf(false) }
+
+    // Launcher لاختيار مجلد من ذاكرة الهاتف
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let {
+            // منح الإذن الدائم للوصول لهذا المجلد حتى بعد إعادة تشغيل الجهاز
+            context.contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            // حفظ مسار المجلد (كـ URI String) في الإعدادات
+            viewModel.setSavePath(it.toString())
+        }
+    }
+
+    // تنسيق عرض مسار الحفظ ليكون واضحاً للمستخدم
+    val displaySavePath = if (savePath.startsWith("content://")) {
+        "مجلد مخصص (تم اختياره من الذاكرة)"
+    } else {
+        savePath
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -135,7 +163,8 @@ fun SettingsScreen(
                         icon = Icons.Filled.Folder,
                         iconTint = MaterialTheme.colorScheme.secondary,
                         title = "مسار الحفظ",
-                        value = savePath
+                        value = displaySavePath,
+                        onClick = { folderPickerLauncher.launch(null) }
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 8.dp),
