@@ -31,26 +31,67 @@ class DownloadAiModelUseCase @Inject constructor(
                     Result.success(Unit)
                 },
                 onFailure = { error ->
-                    // تحديث الحالة لضمان عدم بقاء النموذج معلقاً إذا فشل
-                    repository.updateDownloadState(
-                        id = modelId,
-                        isDownloaded = false,
-                        isCorrupted = true
-                    )
-                    Result.failure(Exception(handleErrorMessage(error)))
+                    // التحقق مما إذا كان الفشل بسبب إلغاء المستخدم للتحميل
+                    val isCancelled = error is java.util.concurrent.CancellationException || 
+                                      error.message?.contains("Canceled", ignoreCase = true) == true ||
+                                      error.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
+
+                    if (isCancelled) {
+                        // في حالة الإلغاء، نعيد الحالة إلى غير محمل وغير تالف
+                        repository.updateDownloadState(
+                            id = modelId,
+                            isDownloaded = false,
+                            isCorrupted = false
+                        )
+                        Result.failure(Exception("تم إلغاء التحميل"))
+                    } else {
+                        // في حالة الخطأ الفعلي، نعتبر الملف تالفاً أو غير مكتمل
+                        repository.updateDownloadState(
+                            id = modelId,
+                            isDownloaded = false,
+                            isCorrupted = true
+                        )
+                        Result.failure(Exception(handleErrorMessage(error)))
+                    }
                 }
             )
         } catch (e: Exception) {
+            val isCancelled = e is java.util.concurrent.CancellationException || 
+                              e.message?.contains("Canceled", ignoreCase = true) == true ||
+                              e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
+            
+            if (isCancelled) {
+                repository.updateDownloadState(
+                    id = modelId,
+                    isDownloaded = false,
+                    isCorrupted = false
+                )
+            }
+            
             Result.failure(Exception(handleErrorMessage(e)))
         }
     }
+
+    // ==========================================
+    // الدالة الجديدة لإلغاء التحميل
+    // ==========================================
+    fun cancelDownload(modelId: String) {
+        // تفويض عملية الإلغاء الفعلية إلى مدير التحميل
+        // هذا سيقوم بإيقاف طلب الشبكة وحذف الملف المؤقت
+        modelManager.cancelDownload(modelId)
+    }
+    // ==========================================
 
     private fun handleErrorMessage(error: Throwable): String {
         val message = error.message ?: "حدث خطأ غير معروف"
         
         return when {
-            message.contains("HTTP") -> "فشل التنزيل: تأكد من صحة الرابط أو توفر خادم النماذج ($message)."
-            message.contains("Checksum", ignoreCase = true) -> "فشل التحقق من الملف: الملف تالف أو غير مكتمل."
+            message.contains("تم إلغاء التحميل", ignoreCase = true) || message.contains("Canceled", ignoreCase = true) -> 
+                "تم إلغاء التحميل."
+            message.contains("HTTP") -> 
+                "فشل التنزيل: تأكد من صحة الرابط أو توفر خادم النماذج ($message)."
+            message.contains("Checksum", ignoreCase = true) -> 
+                "فشل التحقق من الملف: الملف تالف أو غير مكتمل."
             error is IOException || message.contains("network", ignoreCase = true) || message.contains("timeout", ignoreCase = true) -> 
                 "انقطع الاتصال بالشبكة. يرجى التحقق من الإنترنت وإعادة المحاولة."
             message.contains("space", ignoreCase = true) || message.contains("nospc", ignoreCase = true) -> 
