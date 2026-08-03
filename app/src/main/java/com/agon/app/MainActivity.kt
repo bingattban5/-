@@ -4,9 +4,20 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Engineering
@@ -28,7 +39,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,7 +53,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.agon.app.ui.components.AppPermissionHandler // استيراد المكون الجديد
+import com.agon.app.ui.components.AppPermissionHandler
 import com.agon.app.ui.screens.DownloadsScreen
 import com.agon.app.ui.screens.FileManagerScreen
 import com.agon.app.ui.screens.HomeScreen
@@ -89,15 +104,12 @@ fun MainApp() {
         NavItem("settings", "الإعدادات", Icons.Filled.Settings, Icons.Outlined.Settings)
     )
 
-    // تغليف التطبيق بمعالج الصلاحيات
     AppPermissionHandler(
-        onPermissionsGranted = {
-            // يتم تنفيذ هذا الكود فقط بعد منح الصلاحيات بنجاح
-        }
+        onPermissionsGranted = { }
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            bottomBar = { BottomNav(navController, navItems) },
+            bottomBar = { FloatingBottomNav(navController, navItems) }, // استخدام الشريط العائم الجديد
         ) { innerPadding ->
             NavHost(
                 navController = navController,
@@ -130,49 +142,97 @@ fun MainApp() {
 }
 
 @Composable
-fun BottomNav(navController: NavHostController, navItems: List<NavItem>) {
+fun FloatingBottomNav(navController: NavHostController, navItems: List<NavItem>) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    NavigationBar(
-        tonalElevation = 3.dp
-    ) {
-        navItems.forEach { item ->
-            val isSelected = currentRoute == item.route
-
-            NavigationBarItem(
-                icon = {
-                    Icon(
-                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = item.label,
-                        modifier = Modifier.size(if (isSelected) 26.dp else 24.dp)
-                    )
-                },
-                label = {
-                    Text(
-                        text = item.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                selected = isSelected,
-                onClick = {
-                    if (currentRoute != item.route) {
-                        navController.navigate(item.route) {
-                            popUpTo("home") { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    // حاوية الشريط العائم بتأثير زجاجي (Glassmorphism)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp) // هوامش لصنع تأثير الطفو
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(28.dp),
+                ambientColor = Color.Black.copy(alpha = 0.08f),
+                spotColor = Color.Black.copy(alpha = 0.08f)
             )
+            .clip(RoundedCornerShape(28.dp))
+            // لون شبه شفاف لمحاكاة الزجاج (التمويه الحقيقي Blur يتطلب Android 12+ RenderEffect، وهذا البديل الأخف والأكثر توافقاً)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)) 
+    ) {
+        NavigationBar(
+            containerColor = Color.Transparent, // جعل الخلفية شفافة لتظهر خلفية الـ Box
+            tonalElevation = 0.dp,
+            modifier = Modifier.height(64.dp)
+        ) {
+            navItems.forEach { item ->
+                val isSelected = currentRoute == item.route
+                
+                // تحريك لون الأيقونة والنص بسلاسة
+                val iconColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    label = "iconColor"
+                )
+
+                NavigationBarItem(
+                    selected = isSelected,
+                    onClick = {
+                        if (currentRoute != item.route) {
+                            navController.navigate(item.route) {
+                                popUpTo("home") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    },
+                    icon = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxHeight()
+                        ) {
+                            // الأيقونة: تتغير من مخطط (Outlined) إلى ممتلئ (Filled) مع تغيير حجم بسيط
+                            Icon(
+                                imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                                contentDescription = item.label,
+                                tint = iconColor,
+                                modifier = Modifier.size(if (isSelected) 28.dp else 24.dp)
+                            )
+                            
+                            // النقطة المضيئة عند التفعيل
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary)
+                                        .shadow(
+                                            elevation = 4.dp,
+                                            shape = CircleShape,
+                                            ambientColor = MaterialTheme.colorScheme.primary,
+                                            spotColor = MaterialTheme.colorScheme.primary
+                                        )
+                                )
+                            }
+                        }
+                    },
+                    label = {
+                        Text(
+                            text = item.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = iconColor
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.Transparent, // نتحكم في اللون يدوياً
+                        unselectedIconColor = Color.Transparent,
+                        indicatorColor = Color.Transparent // إزالة الخلفية الافتراضية (القرص) لاستبدالها بالنقطة المضيئة
+                    )
+                )
+            }
         }
     }
 }
