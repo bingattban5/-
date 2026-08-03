@@ -586,7 +586,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "أدخل اسم الموقع الذي ينتمي إليه هذا الملف (مثال: pornhub.com)",
+                        text = "أدخل اسم الموقع الذي ينتمي إليه هذا الملف (مثال: example.com)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
