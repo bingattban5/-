@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.DarkMode
@@ -36,12 +38,11 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -49,6 +50,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +74,8 @@ fun SettingsScreen(
     val cacheEnabled by viewModel.cacheEnabled.collectAsState()
     val subtitleFormat by viewModel.subtitleFormat.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+
+    var showSubtitleFormatDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -101,10 +107,7 @@ fun SettingsScreen(
 
         // Appearance Section
         item {
-            SectionHeader(
-                title = "المظهر",
-                icon = Icons.Filled.ColorLens
-            )
+            SectionHeader(title = "المظهر", icon = Icons.Filled.ColorLens)
         }
 
         item {
@@ -122,10 +125,7 @@ fun SettingsScreen(
 
         // Download Section
         item {
-            SectionHeader(
-                title = "التحميل",
-                icon = Icons.Filled.Folder
-            )
+            SectionHeader(title = "التحميل", icon = Icons.Filled.Folder)
         }
 
         item {
@@ -137,7 +137,7 @@ fun SettingsScreen(
                         title = "مسار الحفظ",
                         value = savePath
                     )
-                    androidx.compose.material3.HorizontalDivider(
+                    HorizontalDivider(
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
@@ -152,7 +152,7 @@ fun SettingsScreen(
                             else -> "أفضل جودة متاحة"
                         }
                     )
-                    androidx.compose.material3.HorizontalDivider(
+                    HorizontalDivider(
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
@@ -160,7 +160,8 @@ fun SettingsScreen(
                         icon = Icons.Filled.Description,
                         iconTint = MaterialTheme.colorScheme.primary,
                         title = "صيغة الترجمة",
-                        value = subtitleFormat.uppercase()
+                        value = subtitleFormat.uppercase(),
+                        onClick = { showSubtitleFormatDialog = true }
                     )
                 }
             }
@@ -168,10 +169,7 @@ fun SettingsScreen(
 
         // Translation Section
         item {
-            SectionHeader(
-                title = "الترجمة",
-                icon = Icons.Filled.Translate
-            )
+            SectionHeader(title = "الترجمة", icon = Icons.Filled.Translate)
         }
 
         item {
@@ -189,10 +187,7 @@ fun SettingsScreen(
 
         // Storage Section
         item {
-            SectionHeader(
-                title = "التخزين",
-                icon = Icons.Filled.Storage
-            )
+            SectionHeader(title = "التخزين", icon = Icons.Filled.Storage)
         }
 
         item {
@@ -206,7 +201,7 @@ fun SettingsScreen(
                         checked = cacheEnabled,
                         onCheckedChange = viewModel::setCacheEnabled
                     )
-                    androidx.compose.material3.HorizontalDivider(
+                    HorizontalDivider(
                         modifier = Modifier.padding(vertical = 8.dp),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
@@ -257,10 +252,7 @@ fun SettingsScreen(
 
         // About Section
         item {
-            SectionHeader(
-                title = "حول التطبيق",
-                icon = Icons.Filled.Info
-            )
+            SectionHeader(title = "حول التطبيق", icon = Icons.Filled.Info)
         }
 
         item {
@@ -270,7 +262,7 @@ fun SettingsScreen(
                     AboutRow("الإصدار", "1.0.0")
                     AboutRow("المطور", "Saeed Bingattban")
                     AboutRow("الترخيص", "مفتوح المصدر - MIT")
-                    androidx.compose.material3.HorizontalDivider(
+                    HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
@@ -337,6 +329,54 @@ fun SettingsScreen(
             }
         )
     }
+
+    // Subtitle Format Selection Dialog
+    if (showSubtitleFormatDialog) {
+        val availableFormats = listOf("SRT", "VTT", "ASS", "TXT")
+        AlertDialog(
+            onDismissRequest = { showSubtitleFormatDialog = false },
+            title = { Text("اختر صيغة الترجمة", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    availableFormats.forEach { format ->
+                        val isSelected = subtitleFormat.uppercase() == format
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setSubtitleFormat(format)
+                                    showSubtitleFormatDialog = false
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = format,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "محدد",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        if (format != availableFormats.last()) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSubtitleFormatDialog = false }) {
+                    Text("إغلاق")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -368,9 +408,7 @@ private fun SettingsCard(content: @Composable () -> Unit) {
         shape = RoundedCornerShape(14.dp),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             content()
         }
     }
@@ -432,10 +470,14 @@ private fun SettingsInfoRow(
     icon: ImageVector,
     iconTint: androidx.compose.ui.graphics.Color,
     title: String,
-    value: String
+    value: String,
+    onClick: (() -> Unit)? = null
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -463,6 +505,14 @@ private fun SettingsInfoRow(
                 text = value,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (onClick != null) {
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = "تغيير",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
         }
     }
