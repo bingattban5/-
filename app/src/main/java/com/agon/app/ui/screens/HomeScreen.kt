@@ -1,10 +1,9 @@
 package com.agon.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,25 +20,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Hd
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
@@ -47,8 +38,8 @@ import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -56,20 +47,17 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SheetState
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -78,11 +66,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,7 +84,6 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -117,6 +99,59 @@ fun HomeScreen(
         }
     }
 
+    if (uiState.isResultScreenVisible && uiState.videoInfo != null) {
+        BackHandler {
+            viewModel.onBackPressed()
+        }
+        
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("تفاصيل التحميل", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = viewModel::onBackPressed) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
+                        }
+                    }
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { paddingValues ->
+            ResultScreenContent(
+                modifier = Modifier.padding(paddingValues),
+                viewModel = viewModel,
+                uiState = uiState
+            )
+        }
+
+        if (uiState.showExitDialog) {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissExitDialog,
+                title = { Text("تأكيد الخروج", fontWeight = FontWeight.Bold) },
+                text = { Text("هل أنت متأكد أنك تريد الرجوع لصفحة تحليل الرابط؟") },
+                confirmButton = {
+                    TextButton(onClick = viewModel::confirmExit) {
+                        Text("نعم", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::dismissExitDialog) {
+                        Text("لا")
+                    }
+                }
+            )
+        }
+    } else {
+        MainInputScreen(viewModel, uiState, snackbarHostState)
+    }
+}
+
+@Composable
+fun MainInputScreen(
+    viewModel: HomeViewModel,
+    uiState: com.agon.app.viewmodel.HomeUiState,
+    snackbarHostState: SnackbarHostState
+) {
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
@@ -124,9 +159,8 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item { Spacer(modifier = Modifier.height(8.dp)) }
+            item { Spacer(modifier = Modifier.height(32.dp)) }
 
-            // Header
             item {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -135,10 +169,10 @@ fun HomeScreen(
                     Icon(
                         imageVector = Icons.Filled.SmartDisplay,
                         contentDescription = null,
-                        modifier = Modifier.size(56.dp),
+                        modifier = Modifier.size(72.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "SubVIDD",
                         style = MaterialTheme.typography.headlineLarge,
@@ -154,22 +188,18 @@ fun HomeScreen(
                 }
             }
 
-            // CPU Architecture Chip
             item {
-                AssistChip(
-                    onClick = {},
-                    label = { Text(uiState.cpuArch, style = MaterialTheme.typography.labelSmall) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Filled.Memory,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
-                )
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(uiState.cpuArch, style = MaterialTheme.typography.labelSmall) },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Memory, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
+                    )
+                }
             }
 
-            // URL Input Card
             item {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -184,16 +214,8 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                Icons.Filled.Link,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "رابط الفيديو",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Icon(Icons.Filled.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text("رابط الفيديو", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
 
                         OutlinedTextField(
@@ -201,9 +223,7 @@ fun HomeScreen(
                             onValueChange = viewModel::onUrlChange,
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = { Text("الصق رابط الفيديو هنا...") },
-                            leadingIcon = {
-                                Icon(Icons.Filled.Search, contentDescription = null)
-                            },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             trailingIcon = {
                                 if (uiState.url.isNotEmpty()) {
                                     IconButton(onClick = { viewModel.onUrlChange("") }) {
@@ -215,7 +235,7 @@ fun HomeScreen(
                             shape = RoundedCornerShape(12.dp),
                             keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
                             keyboardActions = KeyboardActions(onGo = { viewModel.analyzeUrl() }),
-                            enabled = !uiState.isAnalyzing && !uiState.isDownloading
+                            enabled = !uiState.isAnalyzing
                         )
 
                         Button(
@@ -223,20 +243,13 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
-                            enabled = uiState.url.isNotBlank() && !uiState.isAnalyzing && !uiState.isDownloading,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
+                            enabled = uiState.url.isNotBlank() && !uiState.isAnalyzing,
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             if (uiState.isAnalyzing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
-                                )
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(uiState.analysisStep.ifEmpty { "جاري التحليل..." })
+                                Text("جاري التحليل...")
                             } else {
                                 Icon(Icons.Filled.Analytics, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -247,532 +260,200 @@ fun HomeScreen(
                 }
             }
 
-            // Analysis Progress
             item {
-                AnimatedVisibility(
-                    visible = uiState.isAnalyzing,
-                    enter = fadeIn() + slideInVertically { it }
-                ) {
+                AnimatedVisibility(visible = uiState.isAnalyzing, enter = fadeIn() + slideInVertically { it }) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 Column {
-                                    Text(
-                                        text = "جاري تحليل الرابط",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Text(
-                                        text = uiState.analysisStep,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                    )
+                                    Text("جاري تحليل الرابط", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Text(uiState.analysisStep, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primaryContainer,
-                            )
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.primaryContainer)
                         }
                     }
                 }
             }
-
-            // Download Progress
-            item {
-                AnimatedVisibility(
-                    visible = uiState.isDownloading,
-                    enter = fadeIn() + slideInVertically { it }
-                ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Download,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "جاري التحميل...",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Text(
-                                        text = "${uiState.downloadProgress}%",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = { uiState.downloadProgress / 100f },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.secondary,
-                                trackColor = MaterialTheme.colorScheme.secondaryContainer,
-                            )
-                        }
-                    }
-                }
-            }
-
-            // SRT Preview
-            item {
-                AnimatedVisibility(
-                    visible = uiState.showSrtPreview && uiState.srtContent.isNotEmpty(),
-                    enter = fadeIn() + slideInVertically { it },
-                    exit = fadeOut()
-                ) {
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Description,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = "معاينة ملف الترجمة (.SRT)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Text(
-                                    text = uiState.srtContent,
-                                    modifier = Modifier.padding(12.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = viewModel::toggleSrtPreview,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("إخفاء")
-                                }
-                                Button(
-                                    onClick = { /* Share SRT */ },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("مشاركة")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp)
-        )
-    }
-
-    // Bottom Sheet
-    if (uiState.showBottomSheet && uiState.videoInfo != null) {
-        ModalBottomSheet(
-            onDismissRequest = viewModel::dismissBottomSheet,
-            sheetState = sheetState,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
-            BottomSheetContent(
-                videoInfo = uiState.videoInfo!!,
-                selectedQuality = uiState.selectedQuality,
-                selectedMode = uiState.selectedMode,
-                subtitleMethod = uiState.subtitleMethod,
-                onQualitySelected = viewModel::selectQuality,
-                onModeSelected = viewModel::selectMode,
-                onStartDownload = viewModel::startDownload,
-                onShowSrt = viewModel::toggleSrtPreview,
-                hasSrt = uiState.srtContent.isNotEmpty(),
-                isDownloading = uiState.isDownloading
-            )
-        }
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 }
 
 @Composable
-private fun BottomSheetContent(
-    videoInfo: com.agon.app.data.VideoInfo,
-    selectedQuality: VideoQuality?,
-    selectedMode: DownloadMode,
-    subtitleMethod: SubtitleMethod,
-    onQualitySelected: (VideoQuality) -> Unit,
-    onModeSelected: (DownloadMode) -> Unit,
-    onStartDownload: () -> Unit,
-    onShowSrt: () -> Unit,
-    hasSrt: Boolean,
-    isDownloading: Boolean
+fun ResultScreenContent(
+    modifier: Modifier = Modifier,
+    viewModel: HomeViewModel,
+    uiState: com.agon.app.viewmodel.HomeUiState
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    val videoInfo = uiState.videoInfo ?: return
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Video Info
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
+        // Video Header Info
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    Icons.Filled.Videocam,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = videoInfo.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${videoInfo.uploader} • ${videoInfo.duration}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        // Download Mode Selection
-        Text(
-            text = "وضع التحميل",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ModeCard(
-                mode = DownloadMode.VIDEO_AND_SUBTITLE,
-                title = "فيديو + ترجمة",
-                description = "تحميل الفيديو مع الترجمة العربية (ترجمة تلقائية إذا لزم الأمر)",
-                icon = Icons.Filled.Videocam,
-                isSelected = selectedMode == DownloadMode.VIDEO_AND_SUBTITLE,
-                onClick = { onModeSelected(DownloadMode.VIDEO_AND_SUBTITLE) }
-            )
-            ModeCard(
-                mode = DownloadMode.VIDEO_ONLY,
-                title = "فيديو فقط",
-                description = "تحميل الفيديو فقط بدون أي ترجمات",
-                icon = Icons.Filled.SmartDisplay,
-                isSelected = selectedMode == DownloadMode.VIDEO_ONLY,
-                onClick = { onModeSelected(DownloadMode.VIDEO_ONLY) }
-            )
-            ModeCard(
-                mode = DownloadMode.SUBTITLE_ONLY,
-                title = "ترجمة فقط",
-                description = "تحميل ملف الترجمة فقط بدون الفيديو",
-                icon = Icons.Filled.Subtitles,
-                isSelected = selectedMode == DownloadMode.SUBTITLE_ONLY,
-                onClick = { onModeSelected(DownloadMode.SUBTITLE_ONLY) }
-            )
-        }
-
-        // Subtitle Method
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = when (subtitleMethod) {
-                    SubtitleMethod.DIRECT_AR -> MaterialTheme.colorScheme.primaryContainer
-                    SubtitleMethod.TRANSLATED_FROM_OTHER -> MaterialTheme.colorScheme.secondaryContainer
-                    SubtitleMethod.WHISPER_GENERATED -> MaterialTheme.colorScheme.tertiaryContainer
-                    SubtitleMethod.NONE -> MaterialTheme.colorScheme.errorContainer
-                }
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = when (subtitleMethod) {
-                        SubtitleMethod.DIRECT_AR -> Icons.Filled.Check
-                        SubtitleMethod.TRANSLATED_FROM_OTHER -> Icons.Filled.Translate
-                        SubtitleMethod.WHISPER_GENERATED -> Icons.Filled.Subtitles
-                        SubtitleMethod.NONE -> Icons.Filled.Error
-                    },
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "طريقة الترجمة",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = when (subtitleMethod) {
-                            SubtitleMethod.DIRECT_AR -> "ترجمة عربية متاحة - تحميل مباشر"
-                            SubtitleMethod.TRANSLATED_FROM_OTHER -> "ترجمة من لغة أخرى - سيتم الترجمة عبر ML Kit"
-                            SubtitleMethod.WHISPER_GENERATED -> "توليد ترجمة عبر Whisper AI من الصوت"
-                            SubtitleMethod.NONE -> "لا تتوفر ترجمة"
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        }
-
-        // Available Subtitles
-        if (videoInfo.availableSubtitles.isNotEmpty()) {
-            Text(
-                text = "الترجمات المتاحة",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                videoInfo.availableSubtitles.take(5).forEach { sub ->
-                    AssistChip(
-                        onClick = {},
-                        label = { Text(sub.language, style = MaterialTheme.typography.labelSmall) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Filled.Language,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = if (sub.languageCode == "ar")
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    )
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(70.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(36.dp))
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = videoInfo.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(text = "${videoInfo.uploader} • ${videoInfo.duration}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
 
         // Quality Selection
-        Text(
-            text = "اختر الجودة",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
+        item {
+            Text("الصيغ المتاحة للتحميل:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(12.dp))
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(videoInfo.qualities) { quality ->
-                val isSelected = selectedQuality?.id == quality.id
-                val bgColor by animateColorAsState(
-                    targetValue = if (isSelected)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else
-                        MaterialTheme.colorScheme.surfaceContainerLow,
-                    label = "qualityBg"
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                videoInfo.qualities.forEach { quality ->
+                    val isSelected = uiState.selectedQuality?.id == quality.id
+                    val bgColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLowest,
+                        label = "qualityBg"
+                    )
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onQualitySelected(quality) },
-                    colors = CardDefaults.cardColors(containerColor = bgColor),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.selectQuality(quality) },
+                        colors = CardDefaults.cardColors(containerColor = bgColor),
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
                     ) {
-                        Icon(
-                            if (isSelected) Icons.Filled.RadioButtonChecked
-                            else Icons.Filled.RadioButtonUnchecked,
-                            contentDescription = null,
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Icon(
-                            Icons.Filled.Hd,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = quality.label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                if (isSelected) Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Text(
-                                text = "${quality.resolution} • ${quality.format.uppercase()}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Icon(Icons.Filled.Hd, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = quality.label, style = MaterialTheme.typography.bodyMedium, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                Text(text = "${quality.resolution} • ${quality.format.uppercase()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(text = quality.fileSize, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text(
-                            text = quality.fileSize,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
-        }
-
-        // Action Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (hasSrt) {
-                FilledTonalButton(
-                    onClick = onShowSrt,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("معاينة SRT")
-                }
-            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
             Button(
-                onClick = onStartDownload,
-                modifier = Modifier.weight(1f),
-                enabled = selectedQuality != null && !isDownloading,
-                shape = RoundedCornerShape(12.dp)
+                onClick = { viewModel.startSpecificDownload(DownloadMode.VIDEO_ONLY, SubtitleMethod.NONE) },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = uiState.selectedQuality != null
             ) {
-                Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("بدء التحميل", fontWeight = FontWeight.Bold)
+                Icon(Icons.Filled.Download, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("تحميل الفيديو", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
-    }
-}
 
-@Composable
-private fun ModeCard(
-    mode: DownloadMode,
-    title: String,
-    description: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected)
-            MaterialTheme.colorScheme.primaryContainer
-        else
-            MaterialTheme.colorScheme.surfaceContainerLow,
-        label = "modeBg"
-    )
+        // Subtitle Section
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("بيانات الترجمة:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                if (isSelected) Icons.Filled.RadioButtonChecked
-                else Icons.Filled.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    when (uiState.subtitleMethod) {
+                        SubtitleMethod.DIRECT_AR -> {
+                            Text("الترجمة العربية متوفرة لهذا الفيديو.", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { viewModel.startSpecificDownload(DownloadMode.SUBTITLE_ONLY, SubtitleMethod.DIRECT_AR) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Icon(Icons.Filled.Subtitles, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("تحميل الترجمة مباشرة")
+                            }
+                        }
+                        
+                        SubtitleMethod.TRANSLATED_FROM_OTHER -> {
+                            if (uiState.subtitleSearchStep == 0) {
+                                Text("الترجمة للعربية غير متوفرة، هل تريد البحث عن ترجمة متوفرة وترجمتها للعربية؟", style = MaterialTheme.typography.bodyMedium)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = viewModel::performSubtitleSearch,
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                ) {
+                                    Icon(Icons.Filled.Search, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("البحث عن ترجمة متاحة")
+                                }
+                            } else {
+                                val foreignSub = videoInfo.availableSubtitles.firstOrNull { it.languageCode != "ar" }
+                                Text("تم العثور على ترجمة: ${foreignSub?.language ?: "أجنبية"}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = { viewModel.startSpecificDownload(DownloadMode.SUBTITLE_ONLY, SubtitleMethod.TRANSLATED_FROM_OTHER) },
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                ) {
+                                    Icon(Icons.Filled.Translate, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("ترجمة الترجمة للعربية")
+                                }
+                            }
+                        }
+
+                        else -> { // WHISPER_GENERATED or NONE
+                            Text("لا توجد أي ترجمة نصية متوفرة لهذا الفيديو.", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { viewModel.startSpecificDownload(DownloadMode.SUBTITLE_ONLY, SubtitleMethod.WHISPER_GENERATED) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                            ) {
+                                Icon(Icons.Filled.Memory, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إنشاء الترجمة بالذكاء الاصطناعي")
+                            }
+                        }
+                    }
+                }
             }
         }
     }
