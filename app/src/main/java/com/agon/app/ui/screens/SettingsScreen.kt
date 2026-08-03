@@ -427,7 +427,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "SubVIDD",
+                        text = "تحميل الفيديو و الترجمة",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -443,7 +443,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "تطوير: Saeed Bingattban",
+                        text = "تطوير: سعيد بن قطبان",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
