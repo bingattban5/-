@@ -25,13 +25,6 @@ android {
         }
     }
 
-    // الإضافة الحاسمة هنا لحل مشكلة عدم إيجاد ملفات jniLibs التنفيذية
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
-
     signingConfigs {
         getByName("debug") {
             storeFile = file("${rootProject.projectDir}/debug.keystore")
@@ -104,6 +97,10 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // مكتبات yt-dlp و FFmpeg المخصصة لأندرويد
+    implementation("com.github.yausername.youtubedl-android:library:0.16.4")
+    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.16.4")
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
