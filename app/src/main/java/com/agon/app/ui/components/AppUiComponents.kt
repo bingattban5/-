@@ -9,12 +9,25 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -114,7 +128,9 @@ fun GlowingCapsuleTextField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState -> onFocusedChange(focusState.isFocused) }, // التصحيح هنا
             placeholder = { Text(placeholder) },
             leadingIcon = leadingIcon,
             trailingIcon = trailingIcon,
@@ -125,8 +141,7 @@ fun GlowingCapsuleTextField(
                 unfocusedBorderColor = Color.Transparent,
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent
-            ),
-            onFocusedChanged = onFocusedChange
+            )
         )
     }
 }
@@ -146,8 +161,7 @@ fun GradientRippleButton(
         modifier = modifier.clip(RoundedCornerShape(16.dp)),
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-        contentPadding = PaddingValues(0.dp),
-        interactionSource = remember { MutableInteractionSource() } // للحفاظ على التموج الأصلي
+        contentPadding = PaddingValues(0.dp)
     ) {
         Box(
             modifier = Modifier
@@ -318,12 +332,11 @@ fun NeonLinearProgressIndicator(
 // ==========================================
 @Composable
 fun CircularProgressDownloadButton(
-    progress: Int?, // null = لم يبدأ، 0-100 = جاري التحميل
+    progress: Int?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (progress != null) {
-        // حالة التحميل: شريط دائري
         Box(contentAlignment = Alignment.Center, modifier = modifier.size(40.dp)) {
             CircularProgressIndicator(
                 progress = { progress / 100f },
@@ -335,7 +348,6 @@ fun CircularProgressDownloadButton(
             Text(text = "$progress%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
     } else {
-        // حالة البدء: أيقونة سحابة
         FilledTonalButton(
             onClick = onClick,
             modifier = modifier.size(40.dp),
@@ -399,14 +411,14 @@ fun SettingsRow(
 }
 
 // ==========================================
-// 11. قائمة قابلة للطي (Accordion)
+// 11. قائمة قابلة للطي (Accordion) - تم إصلاح ColumnScope هنا
 // ==========================================
 @Composable
 fun AccordionList(
     title: String,
     isExpanded: Boolean,
     onToggle: () -> Unit,
-    content: @Composable () -> Unit
+    content: @Composable ColumnScope.() -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -419,12 +431,12 @@ fun AccordionList(
         ) {
             Text(text = title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(
-                imageVector = if (isExpanded) androidx.compose.material.icons.Icons.Filled.KeyboardArrowUp else androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown,
+                imageVector = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
+        AnimatedVisibility(visible = isExpanded) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), content = content)
         }
     }
