@@ -99,8 +99,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // مكتبات yt-dlp و FFmpeg المخصصة لأندرويد
-    implementation("com.github.yausername.youtubedl-android:library:0.16.4")
-    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.16.4")
+    implementation("com.github.yausername.youtubedl-android:library:0.18.1")
+    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.18.1")
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
