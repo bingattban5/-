@@ -45,19 +45,23 @@ class AiModelRepository @Inject constructor(
         aiModelDao.updateModel(model.toEntity())
     }
 
-    // تم إضافة هذه الدالة لتحديث حالة التنزيل في قاعدة البيانات بسهولة وأمان
+    // تم تحديث هذه الدالة لدعم الإيقاف المؤقت وحجم التحميل
     suspend fun updateDownloadState(
         id: String,
         isDownloaded: Boolean,
         filePath: String? = null,
-        isCorrupted: Boolean = false
+        isCorrupted: Boolean = false,
+        isPaused: Boolean = false,
+        downloadedBytes: Long = 0L
     ) {
         val currentModel = getModelById(id)
         if (currentModel != null) {
             val updatedModel = currentModel.copy(
                 isDownloaded = isDownloaded,
                 filePath = filePath ?: currentModel.filePath,
-                isCorrupted = isCorrupted
+                isCorrupted = isCorrupted,
+                isPaused = isPaused,
+                downloadedBytes = downloadedBytes
             )
             updateModel(updatedModel)
         }
@@ -86,6 +90,8 @@ class AiModelRepository @Inject constructor(
             downloadUrl = downloadUrl,
             description = description,
             language = language,
+            isPaused = isPaused,
+            downloadedBytes = downloadedBytes,
             createdAt = createdAt,
             lastUsedAt = lastUsedAt
         )
@@ -106,6 +112,8 @@ class AiModelRepository @Inject constructor(
             downloadUrl = downloadUrl,
             description = description,
             language = language,
+            isPaused = isPaused,
+            downloadedBytes = downloadedBytes,
             createdAt = createdAt,
             lastUsedAt = lastUsedAt
         )
