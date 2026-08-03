@@ -2,9 +2,13 @@ package com.agon.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,17 +26,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
@@ -40,22 +40,17 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,38 +58,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.agon.app.data.AiModel
 import com.agon.app.data.EngineInfo
+import com.agon.app.ui.components.CircularProgressDownloadButton
+import com.agon.app.ui.components.GlassCard
+import com.agon.app.ui.theme.PastelBlue
+import com.agon.app.ui.theme.PastelGreen
 import com.agon.app.ui.theme.SuccessGreen
 import com.agon.app.ui.theme.WarningAmber
 import com.agon.app.viewmodel.ModelsViewModel
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelsScreen(
     viewModel: ModelsViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
     val tabs = listOf("محرك الاستخراج", "نماذج Whisper", "حزم الترجمة")
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         // Header
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    Icons.Filled.Engineering,
+                    Icons.Filled.Dns,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp)
@@ -111,35 +106,30 @@ fun ModelsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
-            // Storage usage
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                shape = RoundedCornerShape(10.dp)
+            // Storage usage (Glass Card)
+            GlassCard(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                elevation = 2.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(
                         Icons.Filled.Storage,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "إجمالي المساحة المستخدمة:",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "المساحة المستخدمة:",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = uiState.totalStorageFormatted,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -147,9 +137,9 @@ fun ModelsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // الرسائل والتنبيهات (Errors and Success Messages)
+        // الرسائل والتنبيهات
         AnimatedVisibility(
             visible = uiState.errorMessage != null || uiState.successMessage != null,
             enter = fadeIn(),
@@ -157,79 +147,104 @@ fun ModelsScreen(
         ) {
             val isError = uiState.errorMessage != null
             val message = uiState.errorMessage ?: uiState.successMessage ?: ""
-            val bgColor = if (isError) MaterialTheme.colorScheme.errorContainer else SuccessGreen.copy(alpha = 0.2f)
+            val bgColor = if (isError) MaterialTheme.colorScheme.errorContainer else SuccessGreen.copy(alpha = 0.15f)
             val contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer else SuccessGreen
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = bgColor),
-                shape = RoundedCornerShape(10.dp)
+            GlassCard(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                elevation = 0.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
                         modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = if (isError) Icons.Filled.Error else Icons.Filled.CheckCircle,
+                            imageVector = if (isError) Icons.Filled.Warning else Icons.Filled.CheckCircle,
                             contentDescription = null,
                             tint = contentColor,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                         Text(
                             text = message,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = contentColor
                         )
                     }
-                    IconButton(
-                        onClick = { viewModel.clearMessage() },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = "إغلاق",
-                            tint = contentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    IconButton(onClick = { viewModel.clearMessage() }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = "إغلاق", tint = contentColor, modifier = Modifier.size(18.dp))
                     }
                 }
             }
 
-            // إخفاء تلقائي بعد 5 ثوانٍ
             LaunchedEffect(message) {
                 delay(5000)
                 viewModel.clearMessage()
             }
         }
 
-        // Tabs
-        TabRow(
-            selectedTabIndex = uiState.selectedTab,
-            modifier = Modifier.fillMaxWidth()
+        // Tabs: Glowing Indicator
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = uiState.selectedTab == index,
-                    onClick = { viewModel.selectTab(index) },
-                    text = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1
-                        )
-                    }
+                val isSelected = uiState.selectedTab == index
+                
+                val indicatorWidth by animateDpAsState(
+                    targetValue = if (isSelected) 40.dp else 0.dp,
+                    label = "tabIndicatorWidth"
                 )
+                val indicatorColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    label = "tabIndicatorColor"
+                )
+                val textColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    label = "tabTextColor"
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { viewModel.selectTab(index) }
+                        .padding(vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = textColor
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(indicatorWidth)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .shadow(
+                                elevation = if (isSelected) 6.dp else 0.dp,
+                                shape = RoundedCornerShape(2.dp),
+                                ambientColor = indicatorColor,
+                                spotColor = indicatorColor
+                            )
+                            .background(indicatorColor)
+                    )
+                }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Tab Content
         when (uiState.selectedTab) {
@@ -269,252 +284,65 @@ private fun YtDlpSection(
     onReinstall: () -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(PastelBlue),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                Icons.Filled.Dns,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Icon(Icons.Filled.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
                         }
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "yt-dlp",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "محرك استخراج الفيديو من المواقع",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(text = "yt-dlp", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(text = "محرك استخراج الفيديو من المواقع", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (engine.isInstalled) {
-                            Card(
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = SuccessGreen.copy(alpha = 0.12f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Verified,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = SuccessGreen
-                                    )
-                                    Text(
-                                        text = "مثبت",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SuccessGreen
-                                    )
+                            Surface(shape = RoundedCornerShape(20.dp), color = SuccessGreen.copy(alpha = 0.15f)) {
+                                Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Icons.Filled.Verified, contentDescription = null, modifier = Modifier.size(14.dp), tint = SuccessGreen)
+                                    Text(text = "مثبت", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = SuccessGreen)
                                 }
                             }
                         }
                     }
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "الإصدار الحالي",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = engine.version.ifEmpty { "غير مثبت" },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
+                    GlassCard(elevation = 0.dp) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = "الإصدار الحالي", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(text = engine.version.ifEmpty { "غير مثبت" }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "يدعم المواقع",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "+1000 موقع",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "الحجم",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "~15 MB",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = "يدعم المواقع", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(text = "+1000 موقع", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
 
-                    AnimatedVisibility(
-                        visible = engine.hasUpdate,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = WarningAmber.copy(alpha = 0.12f)
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Warning,
-                                    contentDescription = null,
-                                    tint = WarningAmber,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "تحديث متاح!",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = WarningAmber
-                                    )
-                                    Text(
-                                        text = "الإصدار الجديد: ${engine.latestVersion}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = WarningAmber
-                                    )
-                                }
-                                Button(
-                                    onClick = onUpdate,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = WarningAmber
-                                    )
-                                ) {
-                                    Icon(Icons.Filled.Update, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("تحديث")
-                                }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FilledTonalButton(onClick = onCheckUpdate, modifier = Modifier.weight(1f), enabled = !engine.isChecking) {
+                            if (engine.isChecking) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("فحص التحديثات", style = MaterialTheme.typography.labelLarge)
+                        }
+                        if (engine.hasUpdate) {
+                            OutlinedButton(onClick = onUpdate, modifier = Modifier.weight(1f), border = BorderStroke(1.dp, WarningAmber)) {
+                                Icon(Icons.Filled.Update, contentDescription = null, modifier = Modifier.size(18.dp), tint = WarningAmber)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("تحديث", color = WarningAmber, style = MaterialTheme.typography.labelLarge)
                             }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = onCheckUpdate,
-                            modifier = Modifier.weight(1f),
-                            enabled = !engine.isChecking
-                        ) {
-                            if (engine.isChecking) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                        } else {
+                            OutlinedButton(onClick = onReinstall, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Filled.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إعادة تثبيت", style = MaterialTheme.typography.labelLarge)
                             }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("فحص التحديثات", style = MaterialTheme.typography.labelMedium)
-                        }
-                        OutlinedButton(
-                            onClick = onReinstall,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Filled.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("إعادة تثبيت", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "المواقع المدعومة",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val sites = listOf("YouTube", "Vimeo", "Dailymotion", "Facebook", "Twitter/X", "Instagram", "TikTok", "Twitch", "Reddit", "+990 موقع آخر")
-                    sites.forEach { site ->
-                        Row(
-                            modifier = Modifier.padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = SuccessGreen
-                            )
-                            Text(
-                                text = site,
-                                style = MaterialTheme.typography.bodySmall
-                            )
                         }
                     }
                 }
@@ -534,46 +362,9 @@ private fun WhisperSection(
     onResumeDownload: (String) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.AudioFile,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Faster-Whisper",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "نماذج ذكاء اصطناعي محلية لتحويل الصوت إلى نص. تعمل بدون إنترنت.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
         items(models) { model ->
             AiModelCard(
                 model = model,
@@ -585,6 +376,7 @@ private fun WhisperSection(
                 onResume = { onResumeDownload(model.id) }
             )
         }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
@@ -599,46 +391,9 @@ private fun ArgosSection(
     onResumeDownload: (String) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Translate,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Argos Translate",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "حزم الترجمة المحلية بدون إنترنت. تُستخدم لترجمة الترجمات الأجنبية إلى العربية.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
         items(models) { model ->
             AiModelCard(
                 model = model,
@@ -650,6 +405,7 @@ private fun ArgosSection(
                 onResume = { onResumeDownload(model.id) }
             )
         }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
@@ -663,180 +419,140 @@ private fun AiModelCard(
     onPause: () -> Unit,
     onResume: () -> Unit
 ) {
-    val cardColor by animateColorAsState(
-        targetValue = when {
-            model.isCorrupted -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            model.isDownloaded -> SuccessGreen.copy(alpha = 0.06f)
-            else -> MaterialTheme.colorScheme.surface
-        },
-        label = "modelCardColor"
-    )
-
-    // حساب التقدم الحالي (سواء كان قيد التحميل النشط أو متوقفاً مؤقتاً)
+    // حساب التقدم الحالي
     val currentProgress = downloadProgress ?: if (model.isPaused && model.sizeBytes > 0) {
         ((model.downloadedBytes.toFloat() / model.sizeBytes) * 100).toInt().coerceIn(0, 100)
     } else {
         null
     }
 
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = cardColor)
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    // حالة الخطأ: بطاقة بحدود حمراء شفافة (Tinted Red)
+    if (model.isCorrupted) {
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(20.dp)),
+            elevation = 0.dp
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        modifier = Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = model.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(text = "⚠️ الملف تالف أو غير مكتمل", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                OutlinedButton(
+                    onClick = onDownload,
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("إعادة التحميل", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+        return
+    }
+
+    // الحالة الطبيعية أو قيد التحميل
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                // أيقونة النموذج بخلفية باستيل ناعمة (Pastel)
                 Box(
                     modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
                         .background(
-                            when {
-                                model.isCorrupted -> MaterialTheme.colorScheme.errorContainer
-                                model.isDownloaded -> SuccessGreen.copy(alpha = 0.15f)
-                                else -> MaterialTheme.colorScheme.surfaceContainerHigh
-                            }
+                            if (model.type == "whisper") PastelBlue else PastelGreen
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        when {
-                            model.isCorrupted -> Icons.Filled.Error
-                            model.isDownloaded -> Icons.Filled.CheckCircle
-                            else -> Icons.Filled.Storage
-                        },
+                        imageVector = if (model.type == "whisper") Icons.Filled.AudioFile else Icons.Filled.Translate,
                         contentDescription = null,
-                        tint = when {
-                            model.isCorrupted -> MaterialTheme.colorScheme.error
-                            model.isDownloaded -> SuccessGreen
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(22.dp)
+                        tint = if (model.type == "whisper") MaterialTheme.colorScheme.primary else SuccessGreen,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
+                
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = model.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${model.sizeFormatted} • ${model.description}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (model.isCorrupted) {
-                        Text(
-                            text = "⚠️ الملف تالف - يرجى إعادة التحميل",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+                    Text(text = model.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(text = model.sizeFormatted, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+
+                // زر التحميل الدائري المتحول (يتحول من أيقونة سحابة إلى شريط تقدم دائري)
+                CircularProgressDownloadButton(
+                    progress = currentProgress,
+                    onClick = {
+                        if (model.isPaused) onResume() else onDownload()
+                    },
+                    modifier = Modifier.size(44.dp)
+                )
             }
 
-            // قسم التقدم وأزرار التحكم
+            // أزرار التحكم الإضافية عند التحميل أو الإيقاف المؤقت
             if (currentProgress != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        LinearProgressIndicator(
-                            progress = { currentProgress / 100f },
-                            modifier = Modifier.weight(1f),
-                            color = if (model.isPaused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        )
-                        Text(
-                            text = "$currentProgress%",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(40.dp)
-                        )
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (model.isPaused && downloadProgress == null) {
-                            // حالة الإيقاف المؤقت
-                            Text(
-                                text = "متوقف مؤقتاً",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(onClick = onResume, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.PlayArrow, contentDescription = "استئناف", tint = MaterialTheme.colorScheme.primary)
-                            }
-                            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
-                            }
-                        } else {
-                            // حالة التحميل النشط
-                            Text(
-                                text = "جاري التحميل...",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(onClick = onPause, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.Pause, contentDescription = "إيقاف مؤقت", tint = MaterialTheme.colorScheme.primary)
-                            }
-                            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-                }
-            } else {
-                // الأزرار العادية عندما لا يكون هناك تحميل نشط أو متوقف
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (model.isDownloaded && !model.isCorrupted) {
-                        OutlinedButton(
-                            onClick = onDelete,
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("حذف")
+                    if (model.isPaused && downloadProgress == null) {
+                        Text(
+                            text = "متوقف مؤقتاً",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = WarningAmber,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onResume, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = "استئناف", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
                         }
                     } else {
-                        if (model.downloadUrl.isBlank()) {
-                            Text(
-                                text = "يتطلب تحميل حزمتين أساسيتين (عبر الإنجليزية)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                        } else {
-                            Button(
-                                onClick = onDownload,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (model.isCorrupted) "إعادة التحميل" else "تحميل")
-                            }
+                        Text(
+                            text = "جاري التحميل...",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onPause, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = "إيقاف", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
+            } else if (model.isDownloaded) {
+                // زر الحذف للنماذج المحملة
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("حذف", fontWeight = FontWeight.Medium)
+                    }
+                }
+            } else if (model.downloadUrl.isBlank()) {
+                Text(
+                    text = "يتطلب تحميل حزمتين أساسيتين (عبر الإنجليزية)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
     }
