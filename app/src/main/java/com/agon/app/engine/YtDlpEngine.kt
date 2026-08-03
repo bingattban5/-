@@ -89,7 +89,6 @@ class YtDlpEngine @Inject constructor(
 
     /**
      * استخراج اسم النطاق (Domain) من الرابط للبحث عن ملف الـ Cookies المناسب
-     * مثال: https://www.pornhub.com/view_video.php -> pornhub.com
      */
     private fun extractDomain(url: String): String? {
         return try {
@@ -102,7 +101,7 @@ class YtDlpEngine @Inject constructor(
 
     /**
      * البحث عن ملف Cookies مطابق للنطاق
-     * يتوقع أن يكون اسم الملف مثل: pornhub.com.txt
+     * يتوقع أن يكون اسم الملف مثل: example.com.txt
      */
     private fun getCookieFileForDomain(domain: String?): File? {
         if (domain.isNullOrBlank()) return null
@@ -235,7 +234,7 @@ class YtDlpEngine @Inject constructor(
     
     /**
      * حفظ ملف Cookies جديد
-     * @param domainName اسم النطاق (مثال: pornhub.com)
+     * @param domainName اسم النطاق (مثال: example.com)
      * @param fileContent محتوى ملف الـ Cookies بصيغة Netscape
      */
     suspend fun saveCookieFile(domainName: String, fileContent: String): Result<Unit> = withContext(Dispatchers.IO) {
