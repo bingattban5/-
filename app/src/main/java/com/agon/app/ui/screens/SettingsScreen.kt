@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -26,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
@@ -45,8 +43,7 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,8 +65,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.agon.app.ui.components.AccordionList
+import com.agon.app.ui.components.GlassCard
+import com.agon.app.ui.components.GroupedSettingsCard
+import com.agon.app.ui.components.SettingsRow
+import com.agon.app.ui.theme.PastelBlue
+import com.agon.app.ui.theme.PastelGreen
+import com.agon.app.ui.theme.PastelOrange
+import com.agon.app.ui.theme.PastelPurple
 import com.agon.app.ui.theme.SuccessGreen
 import com.agon.app.viewmodel.SettingsViewModel
 
@@ -92,6 +98,9 @@ fun SettingsScreen(
     var showDomainDialog by remember { mutableStateOf(false) }
     var pendingCookieContent by remember { mutableStateOf<String?>(null) }
     var domainInput by remember { mutableStateOf("") }
+    
+    // حالة قائمة المكتبات (Accordion)
+    var isLibrariesExpanded by remember { mutableStateOf(false) }
 
     // Launcher لاختيار مجلد من ذاكرة الهاتف
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -121,14 +130,12 @@ fun SettingsScreen(
             
             if (!content.isNullOrBlank()) {
                 pendingCookieContent = content
-                // محاولة تخمين اسم النطاق من اسم الملف
                 domainInput = it.lastPathSegment?.substringBefore(".txt") ?: ""
                 showDomainDialog = true
             }
         }
     }
 
-    // تنسيق عرض مسار الحفظ ليكون واضحاً للمستخدم
     val displaySavePath = if (savePath.startsWith("content://")) {
         "مجلد مخصص (تم اختياره من الذاكرة)"
     } else {
@@ -139,7 +146,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item { Spacer(modifier = Modifier.height(8.dp)) }
 
@@ -165,122 +172,114 @@ fun SettingsScreen(
 
         // Appearance Section
         item {
-            SectionHeader(title = "المظهر", icon = Icons.Filled.ColorLens)
+            Text(
+                text = "المظهر",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         item {
-            SettingsCard {
-                SettingsToggleRow(
+            GroupedSettingsCard {
+                SettingsRow(
                     icon = if (isDarkTheme) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                     iconTint = MaterialTheme.colorScheme.primary,
                     title = "الوضع الليلي",
                     subtitle = if (isDarkTheme) "الوضع الداكن مفعل" else "الوضع الفاتح مفعل",
-                    checked = isDarkTheme,
-                    onCheckedChange = viewModel::setDarkTheme
+                    trailing = {
+                        Switch(
+                            checked = isDarkTheme,
+                            onCheckedChange = viewModel::setDarkTheme,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    }
                 )
             }
         }
 
         // Download Section
         item {
-            SectionHeader(title = "التحميل", icon = Icons.Filled.Folder)
+            Text(
+                text = "التحميل",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         item {
-            SettingsCard {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    SettingsInfoRow(
-                        icon = Icons.Filled.Folder,
-                        iconTint = MaterialTheme.colorScheme.secondary,
-                        title = "مسار الحفظ",
-                        value = displaySavePath,
-                        onClick = { folderPickerLauncher.launch(null) }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    SettingsInfoRow(
-                        icon = Icons.Filled.Hd,
-                        iconTint = MaterialTheme.colorScheme.tertiary,
-                        title = "الجودة الافتراضية",
-                        value = when (defaultQuality) {
-                            "best" -> "أفضل جودة متاحة"
-                            "1080p" -> "1080p (Full HD)"
-                            "720p" -> "720p (HD)"
-                            else -> "أفضل جودة متاحة"
-                        }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    SettingsInfoRow(
-                        icon = Icons.Filled.Description,
-                        iconTint = MaterialTheme.colorScheme.primary,
-                        title = "صيغة الترجمة",
-                        value = subtitleFormat.uppercase(),
-                        onClick = { showSubtitleFormatDialog = true }
-                    )
-                }
+            GroupedSettingsCard {
+                SettingsRow(
+                    icon = Icons.Filled.Folder,
+                    iconTint = PastelBlue,
+                    title = "مسار الحفظ",
+                    subtitle = displaySavePath,
+                    onClick = { folderPickerLauncher.launch(null) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                SettingsRow(
+                    icon = Icons.Filled.Hd,
+                    iconTint = PastelGreen,
+                    title = "الجودة الافتراضية",
+                    subtitle = when (defaultQuality) {
+                        "best" -> "أفضل جودة متاحة"
+                        "1080p" -> "1080p (Full HD)"
+                        "720p" -> "720p (HD)"
+                        else -> "أفضل جودة متاحة"
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                SettingsRow(
+                    icon = Icons.Filled.Description,
+                    iconTint = PastelPurple,
+                    title = "صيغة الترجمة",
+                    subtitle = subtitleFormat.uppercase(),
+                    onClick = { showSubtitleFormatDialog = true }
+                )
             }
         }
 
-        // Cookies Section (الجديد)
+        // Cookies Section
         item {
-            SectionHeader(title = "ملفات المصادقة (Cookies)", icon = Icons.Filled.Key)
+            Text(
+                text = "ملفات المصادقة (Cookies)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         item {
-            SettingsCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { cookiePickerLauncher.launch("text/plain") }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "إضافة ملف Cookies جديد",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "يتجاوز التحقق من العمر ويسمح بتنزيل الفيديوهات المحمية",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    
-                    if (uiState.savedCookieFiles.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            GroupedSettingsCard {
+                SettingsRow(
+                    icon = Icons.Filled.Key,
+                    iconTint = PastelOrange,
+                    title = "إضافة ملف Cookies جديد",
+                    subtitle = "يتجاوز التحقق من العمر ويسمح بتنزيل الفيديوهات المحمية",
+                    onClick = { cookiePickerLauncher.launch("text/plain") }
+                )
+                
+                if (uiState.savedCookieFiles.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "الملفات المحفوظة:",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
                         uiState.savedCookieFiles.forEach { domain ->
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -319,111 +318,154 @@ fun SettingsScreen(
 
         // Translation Section
         item {
-            SectionHeader(title = "الترجمة", icon = Icons.Filled.Translate)
+            Text(
+                text = "الترجمة",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         item {
-            SettingsCard {
-                SettingsToggleRow(
+            GroupedSettingsCard {
+                SettingsRow(
                     icon = Icons.Filled.Translate,
-                    iconTint = MaterialTheme.colorScheme.secondary,
+                    iconTint = PastelGreen,
                     title = "الترجمة التلقائية",
                     subtitle = "ترجمة النصوص غير العربية إلى العربية تلقائياً عبر ML Kit",
-                    checked = autoTranslate,
-                    onCheckedChange = viewModel::setAutoTranslate
+                    trailing = {
+                        Switch(
+                            checked = autoTranslate,
+                            onCheckedChange = viewModel::setAutoTranslate,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    }
                 )
             }
         }
 
         // Storage Section
         item {
-            SectionHeader(title = "التخزين", icon = Icons.Filled.Storage)
+            Text(
+                text = "التخزين",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         item {
-            SettingsCard {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    SettingsToggleRow(
-                        icon = Icons.Filled.Memory,
-                        iconTint = MaterialTheme.colorScheme.tertiary,
-                        title = "ذاكرة التخزين المؤقت",
-                        subtitle = "تخزين مؤقت لتسريع العمليات المتكررة",
-                        checked = cacheEnabled,
-                        onCheckedChange = viewModel::setCacheEnabled
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.showClearCacheDialog() }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.CleaningServices,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(18.dp)
+            GroupedSettingsCard {
+                SettingsRow(
+                    icon = Icons.Filled.Memory,
+                    iconTint = PastelPurple,
+                    title = "ذاكرة التخزين المؤقت",
+                    subtitle = "تخزين مؤقت لتسريع العمليات المتكررة",
+                    trailing = {
+                        Switch(
+                            checked = cacheEnabled,
+                            onCheckedChange = viewModel::setCacheEnabled,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "مسح ذاكرة التخزين المؤقت",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "الحجم الحالي: ${uiState.cacheSize}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            Icons.Filled.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
                         )
                     }
-                }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                SettingsRow(
+                    icon = Icons.Filled.CleaningServices,
+                    iconTint = MaterialTheme.colorScheme.error,
+                    title = "مسح ذاكرة التخزين المؤقت",
+                    subtitle = "الحجم الحالي: ${uiState.cacheSize}",
+                    onClick = { viewModel.showClearCacheDialog() }
+                )
             }
         }
 
-        // About Section
+        // About Section (Luxury Identity Card)
         item {
-            SectionHeader(title = "حول التطبيق", icon = Icons.Filled.Info)
+            Text(
+                text = "حول التطبيق",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         item {
-            SettingsCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AboutRow("اسم التطبيق", "SubVIDD")
-                    AboutRow("الإصدار", "1.0.0")
-                    AboutRow("المطور", "Saeed Bingattban")
-                    AboutRow("الترخيص", "مفتوح المصدر - MIT")
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        Text(
-                            text = "المكتبات المستخدمة",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // شعار التطبيق أو أيقونة فاخرة
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        text = "SubVIDD",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    Text(
+                        text = "الإصدار 1.0.0",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = "تطوير: Saeed Bingattban",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    Text(
+                        text = "مفتوح المصدر - MIT License",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // قائمة المكتبات القابلة للطي (Accordion)
+                    AccordionList(
+                        title = "المكتبات المستخدمة",
+                        isExpanded = isLibrariesExpanded,
+                        onToggle = { isLibrariesExpanded = !isLibrariesExpanded }
+                    ) {
                         val libs = listOf(
                             "yt-dlp" to "محرك استخراج الفيديو",
                             "Whisper.cpp" to "تحويل الصوت إلى نص",
@@ -433,18 +475,22 @@ fun SettingsScreen(
                         )
                         libs.forEach { (name, desc) ->
                             Row(
-                                modifier = Modifier.padding(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
                                     text = "• $name",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "- $desc",
+                                    text = desc,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.End
                                 )
                             }
                         }
@@ -453,7 +499,7 @@ fun SettingsScreen(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+        item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 
     // Clear Cache Dialog
@@ -465,7 +511,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = viewModel::clearCache,
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
@@ -515,7 +561,7 @@ fun SettingsScreen(
                             }
                         }
                         if (format != availableFormats.last()) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                         }
                     }
                 }
@@ -550,7 +596,8 @@ fun SettingsScreen(
                         onValueChange = { domainInput = it },
                         label = { Text("اسم النطاق") },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
             },
@@ -578,164 +625,6 @@ fun SettingsScreen(
                     Text("إلغاء")
                 }
             }
-        )
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String, icon: ImageVector) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(top = 8.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@Composable
-private fun SettingsCard(content: @Composable () -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun SettingsToggleRow(
-    icon: ImageVector,
-    iconTint: androidx.compose.ui.graphics.Color,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(iconTint.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        )
-    }
-}
-
-@Composable
-private fun SettingsInfoRow(
-    icon: ImageVector,
-    iconTint: androidx.compose.ui.graphics.Color,
-    title: String,
-    value: String,
-    onClick: (() -> Unit)? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(iconTint.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (onClick != null) {
-            Icon(
-                Icons.Filled.ArrowDropDown,
-                contentDescription = "تغيير",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun AboutRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold
         )
     }
 }
