@@ -52,6 +52,14 @@ class DownloadAiModelUseCase @Inject constructor(
                 return Result.failure(Exception("فشل في إضافة النموذج إلى قاعدة البيانات."))
             }
 
+            // التأكد من إزالة حالة الإيقاف المؤقت عند بدء أو استئناف التحميل
+            repository.updateDownloadState(
+                id = modelId,
+                isDownloaded = false,
+                isCorrupted = false,
+                isPaused = false
+            )
+
             val result = modelManager.downloadModel(modelId, onProgress)
 
             result.fold(
@@ -60,47 +68,84 @@ class DownloadAiModelUseCase @Inject constructor(
                         id = modelId,
                         isDownloaded = true,
                         filePath = file.absolutePath,
-                        isCorrupted = false
+                        isCorrupted = false,
+                        isPaused = false
                     )
                     Result.success(Unit)
                 },
                 onFailure = { error ->
+                    val isPaused = error.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
                     val isCancelled = error is java.util.concurrent.CancellationException || 
-                                      error.message?.contains("Canceled", ignoreCase = true) == true ||
+                                      error.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true ||
                                       error.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
 
-                    if (isCancelled) {
+                    if (isPaused) {
+                        // في حالة الإيقاف المؤقت، نحتفظ بالملف ونحدث الحالة فقط
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
-                            isCorrupted = false
+                            isCorrupted = false,
+                            isPaused = true
+                        )
+                        Result.failure(Exception("تم إيقاف التحميل مؤقتاً"))
+                    } else if (isCancelled) {
+                        // في حالة الإلغاء، نمسح الحالة المؤقتة
+                        repository.updateDownloadState(
+                            id = modelId,
+                            isDownloaded = false,
+                            isCorrupted = false,
+                            isPaused = false,
+                            downloadedBytes = 0L
                         )
                         Result.failure(Exception("تم إلغاء التحميل"))
                     } else {
+                        // في حالة الخطأ الفعلي، نعتبر الملف تالفاً
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
-                            isCorrupted = true
+                            isCorrupted = true,
+                            isPaused = false
                         )
                         Result.failure(Exception(handleErrorMessage(error)))
                     }
                 }
             )
         } catch (e: Exception) {
+            val isPaused = e.message?.contains("PAUSE_REQUESTED", ignoreCase = true) == true
             val isCancelled = e is java.util.concurrent.CancellationException || 
-                              e.message?.contains("Canceled", ignoreCase = true) == true ||
+                              e.message?.contains("CANCEL_REQUESTED", ignoreCase = true) == true ||
                               e.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
             
-            if (isCancelled) {
+            if (isPaused) {
                 repository.updateDownloadState(
                     id = modelId,
                     isDownloaded = false,
-                    isCorrupted = false
+                    isCorrupted = false,
+                    isPaused = true
+                )
+            } else if (isCancelled) {
+                repository.updateDownloadState(
+                    id = modelId,
+                    isDownloaded = false,
+                    isCorrupted = false,
+                    isPaused = false,
+                    downloadedBytes = 0L
+                )
+            } else {
+                repository.updateDownloadState(
+                    id = modelId,
+                    isDownloaded = false,
+                    isCorrupted = true,
+                    isPaused = false
                 )
             }
             
             Result.failure(Exception(handleErrorMessage(e)))
         }
+    }
+
+    fun pauseDownload(modelId: String) {
+        modelManager.pauseDownload(modelId)
     }
 
     fun cancelDownload(modelId: String) {
@@ -111,7 +156,10 @@ class DownloadAiModelUseCase @Inject constructor(
         val message = error.message ?: "حدث خطأ غير معروف"
         
         return when {
-            message.contains("تم إلغاء التحميل", ignoreCase = true) || message.contains("Canceled", ignoreCase = true) -> 
+            message.contains("تم إيقاف التحميل مؤقتاً", ignoreCase = true) || message.contains("PAUSE_REQUESTED", ignoreCase = true) -> 
+                "تم إيقاف التحميل مؤقتاً."
+            
+            message.contains("تم إلغاء التحميل", ignoreCase = true) || message.contains("CANCEL_REQUESTED", ignoreCase = true) -> 
                 "تم إلغاء التحميل."
             
             message.contains("requires pivot translation", ignoreCase = true) || message.contains("cannot be downloaded directly", ignoreCase = true) -> 
