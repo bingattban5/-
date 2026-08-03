@@ -1,5 +1,6 @@
 package com.agon.app.domain.usecase
 
+import com.agon.app.data.AiModel
 import com.agon.app.data.AiModelRepository
 import com.agon.app.engine.AiModelManager
 import java.io.IOException
@@ -14,14 +15,47 @@ class DownloadAiModelUseCase @Inject constructor(
         onProgress: (Int, Long, Long) -> Unit
     ): Result<Unit> {
         return try {
-            val model = repository.getModelById(modelId)
-                ?: return Result.failure(Exception("لم يتم العثور على النموذج في قاعدة البيانات."))
+            var model = repository.getModelById(modelId)
+            
+            // ==========================================
+            // التعديل الجديد: إضافة النموذج لقاعدة البيانات إذا لم يكن موجوداً
+            // هذا يحدث عند التحميل التلقائي للحزم الوسيطة (مثل fr-en)
+            // ==========================================
+            if (model == null) {
+                val modelInfo = modelManager.getAllModels().find { it.id == modelId }
+                    ?: return Result.failure(Exception("لم يتم العثور على النموذج في قائمة النماذج المتاحة."))
+                
+                repository.addModel(
+                    AiModel(
+                        id = modelInfo.id,
+                        name = modelInfo.name,
+                        type = modelInfo.type.name.lowercase(),
+                        version = "1.0",
+                        sizeBytes = modelInfo.sizeBytes,
+                        sizeFormatted = modelInfo.sizeFormatted,
+                        filePath = "",
+                        checksum = modelInfo.checksum,
+                        isDownloaded = false,
+                        isCorrupted = false,
+                        downloadUrl = modelInfo.downloadUrl,
+                        description = modelInfo.description,
+                        language = modelInfo.language
+                    )
+                )
+                
+                // جلب النموذج المضاف حديثاً
+                model = repository.getModelById(modelId)
+            }
+            // ==========================================
+
+            if (model == null) {
+                return Result.failure(Exception("فشل في إضافة النموذج إلى قاعدة البيانات."))
+            }
 
             val result = modelManager.downloadModel(modelId, onProgress)
 
             result.fold(
                 onSuccess = { file ->
-                    // استخدام الدالة الجديدة لتحديث الحالة بأمان
                     repository.updateDownloadState(
                         id = modelId,
                         isDownloaded = true,
@@ -31,13 +65,11 @@ class DownloadAiModelUseCase @Inject constructor(
                     Result.success(Unit)
                 },
                 onFailure = { error ->
-                    // التحقق مما إذا كان الفشل بسبب إلغاء المستخدم للتحميل
                     val isCancelled = error is java.util.concurrent.CancellationException || 
                                       error.message?.contains("Canceled", ignoreCase = true) == true ||
                                       error.message?.contains("تم إلغاء التحميل", ignoreCase = true) == true
 
                     if (isCancelled) {
-                        // في حالة الإلغاء، نعيد الحالة إلى غير محمل وغير تالف
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
@@ -45,7 +77,6 @@ class DownloadAiModelUseCase @Inject constructor(
                         )
                         Result.failure(Exception("تم إلغاء التحميل"))
                     } else {
-                        // في حالة الخطأ الفعلي، نعتبر الملف تالفاً أو غير مكتمل
                         repository.updateDownloadState(
                             id = modelId,
                             isDownloaded = false,
@@ -72,15 +103,9 @@ class DownloadAiModelUseCase @Inject constructor(
         }
     }
 
-    // ==========================================
-    // الدالة الجديدة لإلغاء التحميل
-    // ==========================================
     fun cancelDownload(modelId: String) {
-        // تفويض عملية الإلغاء الفعلية إلى مدير التحميل
-        // هذا سيقوم بإيقاف طلب الشبكة وحذف الملف المؤقت
         modelManager.cancelDownload(modelId)
     }
-    // ==========================================
 
     private fun handleErrorMessage(error: Throwable): String {
         val message = error.message ?: "حدث خطأ غير معروف"
@@ -88,8 +113,12 @@ class DownloadAiModelUseCase @Inject constructor(
         return when {
             message.contains("تم إلغاء التحميل", ignoreCase = true) || message.contains("Canceled", ignoreCase = true) -> 
                 "تم إلغاء التحميل."
+            
+            message.contains("requires pivot translation", ignoreCase = true) || message.contains("cannot be downloaded directly", ignoreCase = true) -> 
+                "هذا النموذج يعتمد على الترجمة المتتابعة. يرجى تحميل الحزم الأساسية (مثل: من المصدر إلى الإنجليزية، ثم من الإنجليزية إلى العربية) بشكل منفصل."
+            
             message.contains("HTTP") -> 
-                "فشل التنزيل: تأكد من صحة الرابط أو توفر خادم النماذج ($message)."
+                "فشل التنزيل: تأكد من صحة الرابط أو توفر خادم النماذج."
             message.contains("Checksum", ignoreCase = true) -> 
                 "فشل التحقق من الملف: الملف تالف أو غير مكتمل."
             error is IOException || message.contains("network", ignoreCase = true) || message.contains("timeout", ignoreCase = true) -> 
