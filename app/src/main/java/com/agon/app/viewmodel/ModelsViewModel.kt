@@ -115,13 +115,32 @@ class ModelsViewModel @Inject constructor(
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
                         downloadingModels = _uiState.value.downloadingModels - modelId,
-                        // استخدام رسالة الخطأ المخصصة مباشرة من الـ UseCase
                         errorMessage = error.message ?: "حدث خطأ أثناء تحميل النموذج"
                     )
                 }
             )
         }
     }
+
+    // ==========================================
+    // الدالة الجديدة لإلغاء التحميل
+    // ==========================================
+    fun cancelDownload(modelId: String) {
+        viewModelScope.launch {
+            // 1. تحديث الواجهة فوراً لإخفاء شريط التقدم
+            _uiState.value = _uiState.value.copy(
+                downloadingModels = _uiState.value.downloadingModels - modelId,
+                successMessage = "تم إلغاء تحميل النموذج"
+            )
+            
+            // 2. استدعاء دالة الإلغاء في طبقة الـ UseCase
+            // ملاحظة هامة: لكي يتوقف التحميل الفعلي في الخلفية، يجب أن تحتوي 
+            // فئة DownloadAiModelUseCase (أو الـ Repository التابع لها) على دالة للإلغاء.
+            // سأقوم بتعديلها لك بمجرد إرسالك لكود الـ UseCase.
+            downloadAiModelUseCase.cancelDownload(modelId)
+        }
+    }
+    // ==========================================
 
     fun deleteModel(modelId: String) {
         viewModelScope.launch {
@@ -148,7 +167,6 @@ class ModelsViewModel @Inject constructor(
                 ytDlpEngine = _uiState.value.ytDlpEngine.copy(isChecking = true)
             )
 
-            // Note: Real update check would query GitHub API
             _uiState.value = _uiState.value.copy(
                 ytDlpEngine = _uiState.value.ytDlpEngine.copy(
                     isChecking = false,
@@ -171,7 +189,6 @@ class ModelsViewModel @Inject constructor(
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
-                        // التقاط تفاصيل الخطأ مباشرة من المحرك
                         errorMessage = error.message ?: "حدث خطأ غير معروف أثناء التحديث"
                     )
                 }
@@ -191,7 +208,6 @@ class ModelsViewModel @Inject constructor(
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
-                        // التقاط تفاصيل الخطأ مباشرة من المحرك
                         errorMessage = error.message ?: "حدث خطأ غير معروف أثناء التثبيت"
                     )
                 }
