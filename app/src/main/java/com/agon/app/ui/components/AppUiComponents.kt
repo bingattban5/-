@@ -1,5 +1,6 @@
 package com.agon.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -130,7 +132,7 @@ fun GlowingCapsuleTextField(
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .onFocusChanged { focusState -> onFocusedChange(focusState.isFocused) }, // التصحيح هنا
+                .onFocusChanged { focusState -> onFocusedChange(focusState.isFocused) },
             placeholder = { Text(placeholder) },
             leadingIcon = leadingIcon,
             trailingIcon = trailingIcon,
@@ -411,7 +413,7 @@ fun SettingsRow(
 }
 
 // ==========================================
-// 11. قائمة قابلة للطي (Accordion) - تم إصلاح ColumnScope هنا
+// 11. قائمة قابلة للطي (Accordion)
 // ==========================================
 @Composable
 fun AccordionList(
