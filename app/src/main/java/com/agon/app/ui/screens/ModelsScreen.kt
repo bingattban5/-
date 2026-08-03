@@ -241,13 +241,15 @@ fun ModelsScreen(
                 models = uiState.aiModels.filter { it.type == "whisper" },
                 downloadingModels = uiState.downloadingModels,
                 onDownload = viewModel::downloadModel,
-                onDelete = viewModel::deleteModel
+                onDelete = viewModel::deleteModel,
+                onCancelDownload = viewModel::cancelDownload
             )
             2 -> ArgosSection(
                 models = uiState.aiModels.filter { it.type == "argos" },
                 downloadingModels = uiState.downloadingModels,
                 onDownload = viewModel::downloadModel,
-                onDelete = viewModel::deleteModel
+                onDelete = viewModel::deleteModel,
+                onCancelDownload = viewModel::cancelDownload
             )
         }
     }
@@ -520,7 +522,8 @@ private fun WhisperSection(
     models: List<AiModel>,
     downloadingModels: Map<String, Int>,
     onDownload: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onCancelDownload: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -568,7 +571,8 @@ private fun WhisperSection(
                 model = model,
                 downloadProgress = downloadingModels[model.id],
                 onDownload = { onDownload(model.id) },
-                onDelete = { onDelete(model.id) }
+                onDelete = { onDelete(model.id) },
+                onCancel = { onCancelDownload(model.id) }
             )
         }
     }
@@ -579,7 +583,8 @@ private fun ArgosSection(
     models: List<AiModel>,
     downloadingModels: Map<String, Int>,
     onDownload: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onCancelDownload: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -627,7 +632,8 @@ private fun ArgosSection(
                 model = model,
                 downloadProgress = downloadingModels[model.id],
                 onDownload = { onDownload(model.id) },
-                onDelete = { onDelete(model.id) }
+                onDelete = { onDelete(model.id) },
+                onCancel = { onCancelDownload(model.id) }
             )
         }
     }
@@ -638,7 +644,8 @@ private fun AiModelCard(
     model: AiModel,
     downloadProgress: Int?,
     onDownload: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onCancel: () -> Unit
 ) {
     val cardColor by animateColorAsState(
         targetValue = when {
@@ -725,8 +732,23 @@ private fun AiModelCard(
                     Text(
                         text = "$downloadProgress%",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.width(40.dp)
                     )
+                    IconButton(
+                        onClick = onCancel,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "إلغاء التحميل",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
