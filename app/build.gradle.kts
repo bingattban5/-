@@ -98,9 +98,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-      // استخدام الإصدار 0.14.2 المستقر والمضمون تواجده على سيرفرات JitPack
-    implementation("com.github.yausername.youtubedl-android:library:0.14.2")
-    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.14.2")
+          // استخدام إصدار مخزن مسبقاً (Cached) لتجاوز فشل الاتصال مع خوادم البناء
+    implementation("com.github.yausername.youtubedl-android:library:0.17.0")
+    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.17.0")
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
