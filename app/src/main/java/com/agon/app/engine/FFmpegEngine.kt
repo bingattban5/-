@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import com.yausername.ffmpeg.FFmpeg
 import java.io.BufferedReader
 import java.io.File
 import java.io.IOException
@@ -24,9 +25,8 @@ data class FFmpegProgress(
 class FFmpegEngine @Inject constructor(
     private val context: Context
 ) {
-    // دالة ذكية للبحث عن مسار الأدوات سواء كانت مستخرجة من المكتبة أو مضمنة في النظام
+    // استخراج المسار الصحيح للأدوات عبر مكتبة youtubedl-android المدمجة
     private fun getExecutable(name: String): File {
-        // 1. البحث في مجلدات المكتبة الرسمية (مسار الاستخراج التلقائي)
         val libraryDir = File(context.noBackupFilesDir, "youtubedl-android")
         if (libraryDir.exists()) {
             val extractedFile = libraryDir.walkTopDown().firstOrNull { 
@@ -36,8 +36,6 @@ class FFmpegEngine @Inject constructor(
                 return extractedFile
             }
         }
-
-        // 2. المسار الاحتياطي القديم
         val nativeDir = context.applicationInfo.nativeLibraryDir
         return File(nativeDir, "lib${name}.so")
     }
