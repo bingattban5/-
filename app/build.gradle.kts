@@ -98,9 +98,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-          // استخدام إصدار مخزن مسبقاً (Cached) لتجاوز فشل الاتصال مع خوادم البناء
-    implementation("com.github.yausername.youtubedl-android:library:0.17.0")
-    implementation("com.github.yausername.youtubedl-android:ffmpeg:0.17.0")
+     // المسار الجديد والرسمي للمكتبة على Maven Central
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
