@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
@@ -242,14 +244,18 @@ fun ModelsScreen(
                 downloadingModels = uiState.downloadingModels,
                 onDownload = viewModel::downloadModel,
                 onDelete = viewModel::deleteModel,
-                onCancelDownload = viewModel::cancelDownload
+                onCancelDownload = viewModel::cancelDownload,
+                onPauseDownload = viewModel::pauseDownload,
+                onResumeDownload = viewModel::resumeDownload
             )
             2 -> ArgosSection(
                 models = uiState.aiModels.filter { it.type == "argos" },
                 downloadingModels = uiState.downloadingModels,
                 onDownload = viewModel::downloadModel,
                 onDelete = viewModel::deleteModel,
-                onCancelDownload = viewModel::cancelDownload
+                onCancelDownload = viewModel::cancelDownload,
+                onPauseDownload = viewModel::pauseDownload,
+                onResumeDownload = viewModel::resumeDownload
             )
         }
     }
@@ -523,7 +529,9 @@ private fun WhisperSection(
     downloadingModels: Map<String, Int>,
     onDownload: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onCancelDownload: (String) -> Unit
+    onCancelDownload: (String) -> Unit,
+    onPauseDownload: (String) -> Unit,
+    onResumeDownload: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -572,7 +580,9 @@ private fun WhisperSection(
                 downloadProgress = downloadingModels[model.id],
                 onDownload = { onDownload(model.id) },
                 onDelete = { onDelete(model.id) },
-                onCancel = { onCancelDownload(model.id) }
+                onCancel = { onCancelDownload(model.id) },
+                onPause = { onPauseDownload(model.id) },
+                onResume = { onResumeDownload(model.id) }
             )
         }
     }
@@ -584,7 +594,9 @@ private fun ArgosSection(
     downloadingModels: Map<String, Int>,
     onDownload: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onCancelDownload: (String) -> Unit
+    onCancelDownload: (String) -> Unit,
+    onPauseDownload: (String) -> Unit,
+    onResumeDownload: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -633,7 +645,9 @@ private fun ArgosSection(
                 downloadProgress = downloadingModels[model.id],
                 onDownload = { onDownload(model.id) },
                 onDelete = { onDelete(model.id) },
-                onCancel = { onCancelDownload(model.id) }
+                onCancel = { onCancelDownload(model.id) },
+                onPause = { onPauseDownload(model.id) },
+                onResume = { onResumeDownload(model.id) }
             )
         }
     }
@@ -645,7 +659,9 @@ private fun AiModelCard(
     downloadProgress: Int?,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit
 ) {
     val cardColor by animateColorAsState(
         targetValue = when {
@@ -655,6 +671,13 @@ private fun AiModelCard(
         },
         label = "modelCardColor"
     )
+
+    // حساب التقدم الحالي (سواء كان قيد التحميل النشط أو متوقفاً مؤقتاً)
+    val currentProgress = downloadProgress ?: if (model.isPaused && model.sizeBytes > 0) {
+        ((model.downloadedBytes.toFloat() / model.sizeBytes) * 100).toInt().coerceIn(0, 100)
+    } else {
+        null
+    }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -718,65 +741,100 @@ private fun AiModelCard(
                 }
             }
 
-            if (downloadProgress != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LinearProgressIndicator(
-                        progress = { downloadProgress / 100f },
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    )
-                    Text(
-                        text = "$downloadProgress%",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.width(40.dp)
-                    )
-                    IconButton(
-                        onClick = onCancel,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
+            // قسم التقدم وأزرار التحكم
+            if (currentProgress != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = "إلغاء التحميل",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
+                        LinearProgressIndicator(
+                            progress = { currentProgress / 100f },
+                            modifier = Modifier.weight(1f),
+                            color = if (model.isPaused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         )
+                        Text(
+                            text = "$currentProgress%",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(40.dp)
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (model.isPaused && downloadProgress == null) {
+                            // حالة الإيقاف المؤقت
+                            Text(
+                                text = "متوقف مؤقتاً",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = onResume, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = "استئناف", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
+                            }
+                        } else {
+                            // حالة التحميل النشط
+                            Text(
+                                text = "جاري التحميل...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = onPause, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Pause, contentDescription = "إيقاف مؤقت", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                 }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                if (model.isDownloaded && !model.isCorrupted) {
-                    OutlinedButton(
-                        onClick = onDelete,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("حذف")
-                    }
-                } else if (downloadProgress == null) {
-                    Button(
-                        onClick = onDownload,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (model.isCorrupted) "إعادة التحميل" else "تحميل")
+            } else {
+                // الأزرار العادية عندما لا يكون هناك تحميل نشط أو متوقف
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (model.isDownloaded && !model.isCorrupted) {
+                        OutlinedButton(
+                            onClick = onDelete,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("حذف")
+                        }
+                    } else {
+                        if (model.downloadUrl.isBlank()) {
+                            Text(
+                                text = "يتطلب تحميل حزمتين أساسيتين (عبر الإنجليزية)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        } else {
+                            Button(
+                                onClick = onDownload,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (model.isCorrupted) "إعادة التحميل" else "تحميل")
+                            }
+                        }
                     }
                 }
             }
