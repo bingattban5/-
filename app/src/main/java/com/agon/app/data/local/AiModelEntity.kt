@@ -19,6 +19,11 @@ data class AiModelEntity(
     val downloadUrl: String,
     val description: String,
     val language: String?, // For Argos models
+    
+    // الحقول الجديدة لدعم الإيقاف المؤقت والاستئناف
+    val isPaused: Boolean = false,
+    val downloadedBytes: Long = 0L,
+    
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long? = null
 )
