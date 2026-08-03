@@ -38,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,7 +74,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            AgonAppTheme {
+            // إنشاء SettingsViewModel على مستوى Activity لقراءة تفضيل الوضع الليلي
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            val isDarkTheme by settingsViewModel.isDarkTheme.collectAsState()
+
+            AgonAppTheme(
+                darkTheme = isDarkTheme, // تمرير التفضيل للثيم لتفعيل الوضع الليلي
+                dynamicColor = false
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -109,7 +117,7 @@ fun MainApp() {
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            bottomBar = { FloatingBottomNav(navController, navItems) }, // استخدام الشريط العائم الجديد
+            bottomBar = { FloatingBottomNav(navController, navItems) },
         ) { innerPadding ->
             NavHost(
                 navController = navController,
@@ -146,11 +154,10 @@ fun FloatingBottomNav(navController: NavHostController, navItems: List<NavItem>)
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // حاوية الشريط العائم بتأثير زجاجي (Glassmorphism)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp) // هوامش لصنع تأثير الطفو
+            .padding(horizontal = 16.dp, vertical = 12.dp)
             .shadow(
                 elevation = 12.dp,
                 shape = RoundedCornerShape(28.dp),
@@ -158,18 +165,16 @@ fun FloatingBottomNav(navController: NavHostController, navItems: List<NavItem>)
                 spotColor = Color.Black.copy(alpha = 0.08f)
             )
             .clip(RoundedCornerShape(28.dp))
-            // لون شبه شفاف لمحاكاة الزجاج (التمويه الحقيقي Blur يتطلب Android 12+ RenderEffect، وهذا البديل الأخف والأكثر توافقاً)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)) 
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
     ) {
         NavigationBar(
-            containerColor = Color.Transparent, // جعل الخلفية شفافة لتظهر خلفية الـ Box
+            containerColor = Color.Transparent,
             tonalElevation = 0.dp,
             modifier = Modifier.height(64.dp)
         ) {
             navItems.forEach { item ->
                 val isSelected = currentRoute == item.route
-                
-                // تحريك لون الأيقونة والنص بسلاسة
+
                 val iconColor by animateColorAsState(
                     targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     label = "iconColor"
@@ -192,15 +197,13 @@ fun FloatingBottomNav(navController: NavHostController, navItems: List<NavItem>)
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxHeight()
                         ) {
-                            // الأيقونة: تتغير من مخطط (Outlined) إلى ممتلئ (Filled) مع تغيير حجم بسيط
                             Icon(
                                 imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
                                 contentDescription = item.label,
                                 tint = iconColor,
                                 modifier = Modifier.size(if (isSelected) 28.dp else 24.dp)
                             )
-                            
-                            // النقطة المضيئة عند التفعيل
+
                             if (isSelected) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Box(
@@ -227,9 +230,9 @@ fun FloatingBottomNav(navController: NavHostController, navItems: List<NavItem>)
                         )
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Transparent, // نتحكم في اللون يدوياً
+                        selectedIconColor = Color.Transparent,
                         unselectedIconColor = Color.Transparent,
-                        indicatorColor = Color.Transparent // إزالة الخلفية الافتراضية (القرص) لاستبدالها بالنقطة المضيئة
+                        indicatorColor = Color.Transparent
                     )
                 )
             }
