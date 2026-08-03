@@ -1,7 +1,6 @@
 package com.agon.app.engine
 
 import android.content.Context
-import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -9,10 +8,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.io.BufferedReader
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
 import java.io.File
-import java.io.IOException
-import java.io.InputStreamReader
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,77 +62,20 @@ class YtDlpEngine @Inject constructor(
         isLenient = true
     }
 
-    // التعديل الجذري: توجيه المسار إلى مجلد المكتبات الأصلية للتحايل على قيود أندرويد الحديثة
-    private val ytDlpBinary: File by lazy {
-        val nativeDir = context.applicationInfo.nativeLibraryDir
-        File(nativeDir, "libyt-dlp.so")
-    }
-
-    data class CpuArchitecture(
-        val abi: String,
-        val isSupported: Boolean,
-        val displayName: String
-    )
-
-    fun detectCpuArchitecture(): CpuArchitecture {
-        val supportedAbis = Build.SUPPORTED_ABIS
-        val primaryAbi = supportedAbis.firstOrNull() ?: "unknown"
-        val isSupported = primaryAbi in listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
-        val displayName = when (primaryAbi) {
-            "arm64-v8a" -> "ARM 64-bit (arm64-v8a)"
-            "armeabi-v7a" -> "ARM 32-bit (armeabi-v7a)"
-            "x86_64" -> "x86 64-bit"
-            "x86" -> "x86 32-bit"
-            else -> "Unknown ($primaryAbi)"
-        }
-        return CpuArchitecture(
-            abi = primaryAbi,
-            isSupported = isSupported,
-            displayName = displayName
-        )
-    }
-
+    // تُرجع true دائماً لأن المكتبة تتكفل بتثبيت وتهيئة الأداة أثناء تشغيل التطبيق
     fun isYtDlpInstalled(): Boolean {
-        return ytDlpBinary.exists()
+        return true 
     }
 
-    // بما أن الملف أصبح جزءاً من جافاسكريبت/مكتبات الـ jniLibs، يتم استخراجه تلقائياً بواسطة نظام أندرويد عند التثبيت
+    // أبقينا على الدالة لكي لا تتعطل باقي الأكواد التي تستدعيها، وتُرجع نجاحاً مباشراً
     suspend fun installYtDlp(): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            if (isYtDlpInstalled()) {
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("CRITICAL: 'libyt-dlp.so' not found in native library directory. Please ensure it is placed in app/src/main/jniLibs/"))
-            }
-        } catch (e: Exception) {
-            Result.failure(Exception("Failed to verify yt-dlp installation: ${e.javaClass.simpleName} - ${e.message}"))
-        }
+        Result.success(Unit)
     }
 
     suspend fun getVersion(): Result<String> = withContext(Dispatchers.IO) {
         try {
-            if (!isYtDlpInstalled()) {
-                return@withContext Result.failure(Exception("yt-dlp is not installed or missing from native libraries"))
-            }
-
-            val process = ProcessBuilder(ytDlpBinary.absolutePath, "--version")
-                .redirectErrorStream(true)
-                .start()
-
-            val output = BufferedReader(InputStreamReader(process.inputStream)).readText().trim()
-            val exitCode = process.waitFor()
-
-            if (exitCode == 0) {
-                Result.success(output)
-            } else {
-                Result.failure(Exception("Failed to get version: exit code $exitCode. Output: $output"))
-            }
-        } catch (e: IOException) {
-            if (e.message?.contains("error=13") == true || e.message?.contains("Permission denied") == true) {
-                Result.failure(Exception("Permission denied (error=13). The system blocked yt-dlp execution."))
-            } else {
-                Result.failure(Exception("IO Error: ${e.message}"))
-            }
+            val version = YoutubeDL.getInstance().version()
+            Result.success(version ?: "Unknown")
         } catch (e: Exception) {
             Result.failure(Exception("Failed to get version: ${e.message}"))
         }
@@ -142,10 +83,6 @@ class YtDlpEngine @Inject constructor(
 
     suspend fun analyzeUrl(url: String): Result<YtDlpVideoInfo> = withContext(Dispatchers.IO) {
         try {
-            if (!isYtDlpInstalled()) {
-                return@withContext Result.failure(Exception("yt-dlp is not installed or missing from native libraries"))
-            }
-
             if (url.isBlank()) {
                 return@withContext Result.failure(Exception("URL is empty"))
             }
@@ -154,38 +91,19 @@ class YtDlpEngine @Inject constructor(
                 return@withContext Result.failure(Exception("Invalid URL - must start with http:// or https://"))
             }
 
-            val process = ProcessBuilder(
-                ytDlpBinary.absolutePath,
-                "--dump-json",
-                "--no-warnings",
-                "--no-playlist",
-                url
-            ).redirectErrorStream(true).start()
+            // بناء الطلب باستخدام فئة YoutubeDLRequest الخاصة بالمكتبة
+            val request = YoutubeDLRequest(url)
+            request.addOption("--dump-json")
+            request.addOption("--no-warnings")
+            request.addOption("--no-playlist")
 
-            val output = StringBuilder()
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            var line: String?
-
-            while (reader.readLine().also { line = it } != null) {
-                output.appendLine(line)
-            }
-
-            val exitCode = process.waitFor()
-
-            if (exitCode != 0) {
-                return@withContext Result.failure(Exception("yt-dlp failed (exit code $exitCode): ${output.toString().trim()}"))
-            }
-
-            val jsonOutput = output.toString()
-            val videoInfo = json.decodeFromString<YtDlpVideoInfo>(jsonOutput)
-
+            // تنفيذ الطلب
+            val response = YoutubeDL.getInstance().execute(request)
+            
+            // قراءة المخرجات وتحويلها إلى كائن البيانات
+            val videoInfo = json.decodeFromString<YtDlpVideoInfo>(response.out)
             Result.success(videoInfo)
-        } catch (e: IOException) {
-            if (e.message?.contains("error=13") == true) {
-                Result.failure(Exception("Execution blocked (error=13). Permission denied."))
-            } else {
-                Result.failure(Exception("Failed to analyze URL (IO): ${e.message}"))
-            }
+            
         } catch (e: Exception) {
             Result.failure(Exception("Failed to analyze URL: ${e.message}"))
         }
@@ -196,47 +114,29 @@ class YtDlpEngine @Inject constructor(
         formatId: String,
         outputPath: String
     ): Flow<DownloadProgress> = flow {
-        if (!isYtDlpInstalled()) {
-            throw Exception("yt-dlp is not installed or missing from native libraries")
-        }
-
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
 
-        val process = ProcessBuilder(
-            ytDlpBinary.absolutePath,
-            "-f", formatId,
-            "-o", outputPath,
-            "--newline",
-            "--no-warnings",
-            url
-        ).redirectErrorStream(true).start()
+        val request = YoutubeDLRequest(url)
+        request.addOption("-f", formatId)
+        request.addOption("-o", outputPath)
+        request.addOption("--no-warnings")
 
-        val reader = BufferedReader(InputStreamReader(process.inputStream))
-        var line: String?
-
-        while (reader.readLine().also { line = it } != null) {
-            val currentLine = line ?: continue
-            val progressMatch = Regex("""\[download\]\s+(\d+\.?\d*)%""").find(currentLine)
-            if (progressMatch != null) {
-                val progress = progressMatch.groupValues[1].toFloatOrNull()?.toInt() ?: 0
-                emit(DownloadProgress(progress, currentLine))
-            } else if (currentLine.contains("ERROR:") || currentLine.contains("error")) {
-                emit(DownloadProgress(-1, currentLine)) 
+        try {
+            // نمرر id للتاسك لتتبع نسبة التحميل
+            YoutubeDL.getInstance().execute(request, "VideoDownloadTask") { progress, etaInSeconds, line ->
+                emit(DownloadProgress(progress.toInt(), line ?: "Downloading..."))
             }
+
+            if (outputFile.exists()) {
+                emit(DownloadProgress(100, "Download completed"))
+            } else {
+                throw Exception("Output file was not created. Path: $outputPath")
+            }
+        } catch (e: Exception) {
+            emit(DownloadProgress(-1, "Error: ${e.message}"))
+            throw e
         }
-
-        val exitCode = process.waitFor()
-
-        if (exitCode != 0) {
-            throw Exception("Download failed with exit code $exitCode")
-        }
-
-        if (!outputFile.exists()) {
-            throw Exception("Output file was not created. Path: $outputPath")
-        }
-
-        emit(DownloadProgress(100, "Download completed"))
     }.flowOn(Dispatchers.IO)
 
     suspend fun downloadSubtitles(
@@ -246,39 +146,25 @@ class YtDlpEngine @Inject constructor(
         autoGenerated: Boolean = false
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
-            if (!isYtDlpInstalled()) {
-                return@withContext Result.failure(Exception("yt-dlp is not installed"))
-            }
-
             val outputFile = File(outputPath)
             outputFile.parentFile?.mkdirs()
 
-            val subtitleFlag = if (autoGenerated) "--write-auto-subs" else "--write-subs"
-            val process = ProcessBuilder(
-                ytDlpBinary.absolutePath,
-                subtitleFlag,
-                "--sub-lang", language,
-                "--sub-format", "srt",
-                "--skip-download",
-                "-o", outputPath,
-                url
-            ).redirectErrorStream(true).start()
+            val request = YoutubeDLRequest(url)
+            request.addOption(if (autoGenerated) "--write-auto-subs" else "--write-subs")
+            request.addOption("--sub-lang", language)
+            request.addOption("--sub-format", "srt")
+            request.addOption("--skip-download")
+            request.addOption("-o", outputPath)
 
-            val output = BufferedReader(InputStreamReader(process.inputStream)).readText()
-            val exitCode = process.waitFor()
-
-            if (exitCode != 0) {
-                return@withContext Result.failure(Exception("Subtitle download failed: $output"))
-            }
+            YoutubeDL.getInstance().execute(request)
 
             val srtFile = File(outputPath.replace("%(ext)s", "srt"))
-            if (!srtFile.exists()) {
-                return@withContext Result.failure(Exception("Subtitle file was not created. Output logs: $output"))
+            if (srtFile.exists()) {
+                Result.success(srtFile)
+            } else {
+                Result.failure(Exception("Subtitle file was not created."))
             }
-
-            Result.success(srtFile)
         } catch (e: Exception) {
             Result.failure(Exception("Subtitle download failed: ${e.message}"))
         }
     }
-}
