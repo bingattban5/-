@@ -40,7 +40,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Videocam
@@ -76,6 +75,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -212,7 +212,7 @@ fun MainInputScreen(
                     
                     Spacer(modifier = Modifier.height(20.dp))
                     
-                    // اسم التطبيق بتدرج لوني
+                    // اسم التطبيق بتدرج لوني هندسي عريض
                     Text(
                         text = "SubVIDD",
                         style = MaterialTheme.typography.headlineLarge.copy(
@@ -284,7 +284,7 @@ fun MainInputScreen(
                             Text("رابط الفيديو", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
 
-                        // حقل إدخال كبسولي مع توهج عند النقر
+                        // حقل إدخال كبسولي عائم مع توهج أزرق خفيف عند النقر
                         var isFocused by remember { mutableStateOf(false) }
                         val glowColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isFocused) 0.4f else 0f)
                         
@@ -303,7 +303,9 @@ fun MainInputScreen(
                             OutlinedTextField(
                                 value = uiState.url,
                                 onValueChange = viewModel::onUrlChange,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { focusState -> isFocused = focusState.isFocused }, // التصحيح هنا
                                 placeholder = { Text("الصق رابط الفيديو هنا...") },
                                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                                 trailingIcon = {
@@ -322,12 +324,11 @@ fun MainInputScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
                                 keyboardActions = KeyboardActions(onGo = { viewModel.analyzeUrl() }),
-                                enabled = !uiState.isAnalyzing,
-                                onFocusedChanged = { isFocused = it }
+                                enabled = !uiState.isAnalyzing
                             )
                         }
 
-                        // زر تحليل الرابط بتدرج لوني حيوي
+                        // زر تحليل الرابط بتدرج لوني حيوي وتأثير تموج
                         Button(
                             onClick = viewModel::analyzeUrl,
                             modifier = Modifier
@@ -348,8 +349,8 @@ fun MainInputScreen(
                                     )
                                     .clickable(
                                         enabled = uiState.url.isNotBlank() && !uiState.isAnalyzing,
-                                        indication = null, // نستخدم تموج الزر الافتراضي
-                                        interactionSource = remember { MutableInteractionSource() }
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null // نسمح للزر الأصلي بالتعامل مع التموج
                                     ) { viewModel.analyzeUrl() },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -389,7 +390,11 @@ fun MainInputScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.primaryContainer)
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), 
+                                color = MaterialTheme.colorScheme.primary, 
+                                trackColor = MaterialTheme.colorScheme.primaryContainer
+                            )
                         }
                     }
                 }
@@ -462,7 +467,7 @@ fun ResultScreenContent(
                         modifier = Modifier.fillMaxWidth().clickable { viewModel.selectQuality(quality) },
                         colors = CardDefaults.cardColors(containerColor = bgColor),
                         shape = RoundedCornerShape(16.dp),
-                        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
