@@ -24,20 +24,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5 # تم التحديث إلى الإصدار الخامس لحل تحذير الـ deprecation
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+          # تم إزالة (cache: gradle) من هنا لتجنب التضارب، لأن خطوة Setup Gradle بالأسفل تقوم بهذه المهمة بشكل أفضل.
 
       - name: Grant execute permission
         run: chmod +x gradlew
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-overwrite-existing: true # يضمن تحديث الكاش القديم إذا كان تالفاً
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        # إضافة clean و --no-build-cache لفرض بناء نظيف تماماً وحل مشكلة KSP/Hilt
+        run: ./gradlew clean assembleDebug --stacktrace --no-daemon --no-build-cache
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -53,3 +56,4 @@ jobs:
           path: |
             **/build/reports/**
             **/build/test-results/**
+          if-no-files-found: ignore # لإخفاء التحذير المزعج إذا فشل البناء ولم يتم إنشاء تقارير
