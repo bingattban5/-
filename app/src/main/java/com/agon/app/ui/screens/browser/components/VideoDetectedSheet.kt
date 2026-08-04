@@ -1,6 +1,7 @@
 package com.agon.app.ui.screens.browser.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -119,7 +120,7 @@ fun VideoDetectedSheet(
                                 .clickable { onSelectQuality(quality) },
                             colors = CardDefaults.cardColors(containerColor = bgColor),
                             shape = RoundedCornerShape(16.dp),
-                            border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                         ) {
                             Row(
                                 modifier = Modifier
