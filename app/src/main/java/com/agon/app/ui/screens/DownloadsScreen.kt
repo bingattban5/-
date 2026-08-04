@@ -75,7 +75,7 @@ fun DownloadsScreen(
 ) {
     val downloads by viewModel.downloads.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    val filteredDownloads = viewModel.filterDownloads(downloads)
+    val filteredDownloads by viewModel.filteredDownloads.collectAsState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
