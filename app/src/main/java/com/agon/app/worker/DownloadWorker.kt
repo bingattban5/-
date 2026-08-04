@@ -81,7 +81,7 @@ class DownloadWorker @AssistedInject constructor(
             if (shouldRetry(e)) {
                 retryResult("انقطع الاتصال، جاري إعادة المحاولة...")
             } else {
-                failureResult("Download failed: ${e.message}")
+                failureResult(e.message ?: "Download failed")
             }
         }
     }
@@ -94,7 +94,6 @@ class DownloadWorker @AssistedInject constructor(
         updateStatus(DownloadStatus.DOWNLOADING, 0, "0 B", "", "")
 
         var errorMessage: String? = null
-        var lastProgress = 0
 
         try {
             ytDlpEngine.downloadVideo(url, formatId, outputPath)
@@ -105,7 +104,6 @@ class DownloadWorker @AssistedInject constructor(
                     if (progress.progress == -1) {
                         errorMessage = progress.message
                     } else {
-                        lastProgress = progress.progress
                         val stats = calculateStats(progress.progress)
                         updateStatus(
                             DownloadStatus.DOWNLOADING,
@@ -119,12 +117,7 @@ class DownloadWorker @AssistedInject constructor(
                 }
 
             if (errorMessage != null) {
-                val exception = Exception(errorMessage)
-                return if (shouldRetry(exception)) {
-                    retryResult(handleYtDlpError(exception))
-                } else {
-                    failureResult(handleYtDlpError(exception))
-                }
+                return failureResult(errorMessage)
             }
 
             val outputFile = File(outputPath)
@@ -142,7 +135,7 @@ class DownloadWorker @AssistedInject constructor(
                     .build()
             )
         } catch (e: Exception) {
-            return if (shouldRetry(e)) retryResult(handleYtDlpError(e)) else failureResult(handleYtDlpError(e))
+            return failureResult(e.message ?: "Unknown error")
         }
     }
 
@@ -181,12 +174,7 @@ class DownloadWorker @AssistedInject constructor(
                 }
 
             if (errorMessage != null) {
-                val exception = Exception(errorMessage)
-                return if (shouldRetry(exception)) {
-                    retryResult(handleYtDlpError(exception))
-                } else {
-                    failureResult(handleYtDlpError(exception))
-                }
+                return failureResult(errorMessage)
             }
 
             val videoFile = File(outputPath)
@@ -280,7 +268,7 @@ class DownloadWorker @AssistedInject constructor(
                 )
             }
         } catch (e: Exception) {
-            return if (shouldRetry(e)) retryResult(handleYtDlpError(e)) else failureResult(handleYtDlpError(e))
+            return failureResult(e.message ?: "Unknown error")
         }
     }
 
@@ -386,8 +374,7 @@ class DownloadWorker @AssistedInject constructor(
             )
         } else {
             val error = subtitleResult.exceptionOrNull()
-            val exception = error ?: Exception("Unknown error")
-            if (shouldRetry(exception)) retryResult(handleYtDlpError(exception)) else failureResult(handleYtDlpError(exception))
+            return failureResult(error?.message ?: "Unknown error")
         }
     }
 
@@ -455,28 +442,123 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
-    private fun handleYtDlpError(error: Throwable): String {
-        val message = error.message ?: "Unknown error"
+    /**
+     * دالة ذكية لتحليل رسائل الخطأ وإرجاع رسالة عربية واضحة ومفيدة
+     */
+    private fun getSmartErrorMessage(error: String): String {
+        val trimmedError = error.trim()
+        
         return when {
-            message.contains("error=13") || message.contains("Permission denied") ->
-                "خطأ في الصلاحيات (Error=13). الملف التنفيذي غير مدعوم أو النظام يمنعه."
-            message.contains("403") || message.contains("Forbidden") ->
-                "يوتيوب يحجب النسخة الحالية من المحرك (403). جرّب تحديث المحرك من شاشة النماذج أو أعد المحاولة لاحقاً."
-            message.contains("CRITICAL") -> 
-                message
-            message.contains("Private video", ignoreCase = true) ->
-                "هذا فيديو خاص ولا يمكن الوصول إليه."
-            message.contains("Video unavailable", ignoreCase = true) ->
-                "الفيديو غير متاح أو تم حذفه."
-            message.contains("Geo-restricted", ignoreCase = true) ->
-                "الفيديو محجوب جغرافياً في منطقتك."
-            message.contains("Sign in", ignoreCase = true) || message.contains("login", ignoreCase = true) ->
-                "يتطلب هذا الفيديو تسجيل الدخول."
-            message.contains("network", ignoreCase = true) || message.contains("connection", ignoreCase = true) ->
-                "خطأ في الاتصال بالشبكة. تحقق من اتصالك بالإنترنت."
-            message.contains("URL", ignoreCase = true) ->
-                "رابط غير صالح أو غير مدعوم."
-            else -> "فشل التحميل: $message"
+            // أخطاء yt-dlp الشائعة
+            trimmedError.contains("403") || trimmedError.contains("Forbidden", ignoreCase = true) ->
+                "❌ يوتيوب يرفض الاتصال (خطأ 403)\n" +
+                "السبب: نسخة yt-dlp قديمة أو الفيديو محمي\n" +
+                "الحل: اذهب إلى 'النماذج' واضغط 'تحديث المحرك'، أو جرب فيديو آخر"
+            
+            trimmedError.contains("429") || trimmedError.contains("Too Many Requests", ignoreCase = true) ->
+                "❌ تم حظر الطلبات المتكررة (خطأ 429)\n" +
+                "السبب: طلبات كثيرة في وقت قصير\n" +
+                "الحل: انتظر 5 دقائق ثم أعد المحاولة"
+            
+            trimmedError.contains("Video unavailable", ignoreCase = true) || 
+            trimmedError.contains("not available", ignoreCase = true) ->
+                "❌ الفيديو غير متاح\n" +
+                "السبب: تم حذف الفيديو أو أنه خاص\n" +
+                "الحل: تأكد من صحة الرابط وأن الفيديو عام"
+            
+            trimmedError.contains("Private video", ignoreCase = true) ->
+                "❌ فيديو خاص\n" +
+                "السبب: الفيديو يتطلب تسجيل دخول\n" +
+                "الحل: أضف ملف Cookies من الإعدادات"
+            
+            trimmedError.contains("Geo-restricted", ignoreCase = true) || 
+            trimmedError.contains("not available in your country", ignoreCase = true) ->
+                "❌ الفيديو محظور في منطقتك\n" +
+                "السبب: قيود جغرافية\n" +
+                "الحل: استخدم VPN أو جرب فيديو آخر"
+            
+            trimmedError.contains("Sign in", ignoreCase = true) || 
+            trimmedError.contains("login", ignoreCase = true) || 
+            trimmedError.contains("authentication", ignoreCase = true) ->
+                "❌ يتطلب تسجيل دخول\n" +
+                "السبب: الفيديو محمي\n" +
+                "الحل: أضف ملف Cookies من الإعدادات"
+            
+            // أخطاء الترجمة
+            trimmedError.contains("Subtitle file was not created", ignoreCase = true) || 
+            trimmedError.contains("No subtitle", ignoreCase = true) ->
+                "❌ فشل تحميل الترجمة\n" +
+                "السبب: الفيديو لا يحتوي على ترجمة\n" +
+                "الحل: اختر 'إنشاء ترجمة بالذكاء الاصطناعي' من خيارات التحميل"
+            
+            trimmedError.contains("translation failed", ignoreCase = true) || 
+            trimmedError.contains("Argos", ignoreCase = true) ->
+                "❌ فشل الترجمة\n" +
+                "السبب: نموذج الترجمة غير مثبت\n" +
+                "الحل: اذهب إلى 'النماذج' وحمّل نموذج الترجمة"
+            
+            trimmedError.contains("Whisper", ignoreCase = true) || 
+            trimmedError.contains("transcribe", ignoreCase = true) ->
+                " فشل إنشاء الترجمة بالذكاء الاصطناعي\n" +
+                "السبب: نموذج Whisper غير مثبت أو الذاكرة غير كافية\n" +
+                "الحل: اذهب إلى 'النماذج' وحمّل نموذج Whisper المناسب"
+            
+            // أخطاء الشبكة
+            trimmedError.contains("network", ignoreCase = true) || 
+            trimmedError.contains("connection", ignoreCase = true) || 
+            trimmedError.contains("timeout", ignoreCase = true) ->
+                "❌ خطأ في الاتصال بالإنترنت\n" +
+                "السبب: انقطاع الشبكة أو ضعف الإشارة\n" +
+                "الحل: تحقق من اتصالك بالإنترنت"
+            
+            trimmedError.contains("DNS", ignoreCase = true) || 
+            trimmedError.contains("resolve", ignoreCase = true) ->
+                "❌ فشل في حل اسم النطاق\n" +
+                "السبب: مشكلة في DNS\n" +
+                "الحل: جرب شبكة أخرى أو أعد تشغيل الراوتر"
+            
+            // أخطاء الملفات والصلاحيات
+            trimmedError.contains("Permission denied", ignoreCase = true) || 
+            trimmedError.contains("error=13") ->
+                "❌ لا توجد صلاحيات الكتابة\n" +
+                "السبب: التطبيق لا يملك صلاحية التخزين\n" +
+                "الحل: اذهب إلى إعدادات الهاتف وامنح التطبيق صلاحية التخزين"
+            
+            trimmedError.contains("No space", ignoreCase = true) || 
+            trimmedError.contains("disk full", ignoreCase = true) ->
+                " المساحة ممتلئة\n" +
+                "السبب: لا توجد مساحة كافية\n" +
+                "الحل: احذف بعض الملفات وحاول مرة أخرى"
+            
+            // أخطاء المحركات
+            trimmedError.contains("yt-dlp", ignoreCase = true) || 
+            trimmedError.contains("youtube-dl", ignoreCase = true) ->
+                "❌ خطأ في محرك yt-dlp\n" +
+                "السبب: المحرك غير مثبت أو تالف\n" +
+                "الحل: اذهب إلى 'النماذج' وأعد تثبيت المحرك"
+            
+            trimmedError.contains("ffmpeg", ignoreCase = true) || 
+            trimmedError.contains("FFmpeg", ignoreCase = true) ->
+                "❌ خطأ في FFmpeg\n" +
+                "السبب: FFmpeg غير مثبت\n" +
+                "الحل: اذهب إلى 'النماذج' وحمّل FFmpeg"
+            
+            // أخطاء الرابط
+            trimmedError.contains("URL", ignoreCase = true) || 
+            trimmedError.contains("Invalid", ignoreCase = true) ->
+                "❌ رابط غير صالح\n" +
+                "السبب: الرابط خاطئ أو غير مدعوم\n" +
+                "الحل: تأكد من نسخ الرابط بشكل صحيح"
+            
+            // رسائل عامة
+            trimmedError.contains("CRITICAL", ignoreCase = true) ->
+                "❌ خطأ حرج في المحرك\n" +
+                "التفاصيل: $trimmedError\n" +
+                "الحل: أعد تشغيل التطبيق وحاول مرة أخرى"
+            
+            else -> "❌ فشل التحميل\n" +
+                    "التفاصيل: $trimmedError\n" +
+                    "الحل: أعد المحاولة أو جرب فيديو آخر"
         }
     }
 
@@ -491,11 +573,12 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     private suspend fun failureResult(error: String): Result {
-        downloadRepository.updateError(downloadId, DownloadStatus.FAILED, error)
+        val smartError = getSmartErrorMessage(error)
+        downloadRepository.updateError(downloadId, DownloadStatus.FAILED, smartError)
         notificationManager.cancel(notificationId)
         return Result.failure(
             Data.Builder()
-                .putString(KEY_ERROR, error)
+                .putString(KEY_ERROR, smartError)
                 .build()
         )
     }
