@@ -1,11 +1,14 @@
 package com.agon.app.ui.screens.browser.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -21,10 +24,8 @@ fun LongPressLinkMenu(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = link,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium
+                text = "خيارات الرابط",
+                fontWeight = FontWeight.Bold
             )
         },
         text = {
@@ -32,42 +33,61 @@ fun LongPressLinkMenu(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                DropdownMenuItem(
-                    text = { Text("فتح في تبويب جديد (خلفي)") },
-                    onClick = {
-                        onOpenInBackground()
-                        onDismiss()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Tab, contentDescription = null)
-                    }
+                // عرض الرابط المختصر
+                Text(
+                    text = link,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                DropdownMenuItem(
-                    text = { Text("نسخ الرابط") },
-                    onClick = {
-                        onCopyLink()
-                        onDismiss()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Filled.ContentCopy, contentDescription = null)
-                    }
-                )
+                // خيار: فتح في خلفية
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenInBackground() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("فتح في تبويب جديد (خلفية)", style = MaterialTheme.typography.bodyLarge)
+                }
 
-                DropdownMenuItem(
-                    text = { Text("مشاركة الرابط") },
-                    onClick = {
-                        onShareLink()
-                        onDismiss()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Share, contentDescription = null)
-                    }
-                )
+                HorizontalDivider()
+
+                // خيار: نسخ الرابط
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onCopyLink() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("نسخ الرابط", style = MaterialTheme.typography.bodyLarge)
+                }
+
+                HorizontalDivider()
+
+                // خيار: مشاركة الرابط
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onShareLink() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(Icons.Filled.Share, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("مشاركة الرابط", style = MaterialTheme.typography.bodyLarge)
+                }
             }
         },
-        confirmButton = {},
-        dismissButton = {
+        confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("إلغاء")
             }
