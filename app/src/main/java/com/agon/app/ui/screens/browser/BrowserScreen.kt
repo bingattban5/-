@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.navigation.NavHostController
 import com.agon.app.data.DownloadMode
 import com.agon.app.data.SubtitleMethod
 import com.agon.app.ui.screens.browser.components.*
@@ -30,7 +31,8 @@ import com.agon.app.viewmodel.BrowserViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserScreen(
-    viewModel: BrowserViewModel
+    viewModel: BrowserViewModel,
+    navController: NavHostController? = null
 ) {
     val state by viewModel.state.collectAsState()
     val pendingNavigation by viewModel.pendingNavigation.collectAsState()
@@ -147,7 +149,7 @@ fun BrowserScreen(
                         text = { Text("التنزيلات") },
                         onClick = {
                             viewModel.dismissMainMenu()
-                            // التنقل للتنزيلات سيتم من MainActivity
+                            navController?.navigate("downloads")
                         },
                         leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) }
                     )
@@ -155,6 +157,7 @@ fun BrowserScreen(
                         text = { Text("النماذج") },
                         onClick = {
                             viewModel.dismissMainMenu()
+                            navController?.navigate("models")
                         },
                         leadingIcon = { Icon(Icons.Filled.Memory, contentDescription = null) }
                     )
@@ -162,6 +165,7 @@ fun BrowserScreen(
                         text = { Text("الإعدادات") },
                         onClick = {
                             viewModel.dismissMainMenu()
+                            navController?.navigate("settings")
                         },
                         leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) }
                     )
@@ -311,7 +315,6 @@ private fun BrowserWebView(
         update = { webView ->
             // تحميل رابط جديد عند تغيير التبويب
             if (currentUrl != lastLoadedUrl && currentUrl.isNotBlank()) {
-                // نتحقق من أن الرابط مختلف لتجنب إعادة التحميل اللانهائية
                 val webViewCurrentUrl = webView.url
                 if (webViewCurrentUrl != currentUrl) {
                     webView.loadUrl(currentUrl)
