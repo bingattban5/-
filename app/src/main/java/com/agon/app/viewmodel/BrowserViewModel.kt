@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.agon.app.data.AppPreferences
+import com.agon.app.data.AppPreferencesRepository
 import com.agon.app.data.DownloadItem
 import com.agon.app.data.DownloadMode
 import com.agon.app.data.DownloadRepository
@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URL
@@ -41,7 +42,7 @@ class BrowserViewModel @Inject constructor(
     private val determineSubtitleMethodUseCase: DetermineSubtitleMethodUseCase,
     private val addDownloadUseCase: AddDownloadUseCase,
     private val downloadRepository: DownloadRepository,
-    private val preferences: AppPreferences
+    private val appPreferencesRepository: AppPreferencesRepository
 ) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(BrowserState())
@@ -103,7 +104,6 @@ class BrowserViewModel @Inject constructor(
                 it.copy(isLoading = true, url = url, progress = 0)
             }
         }
-        // إعادة تعيين حالة الفيديو عند تحميل صفحة جديدة
         _state.value = _state.value.copy(
             videoInfo = null,
             detectedVideoUrl = null,
@@ -142,7 +142,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ========================================
-    // تحليل الصفحة الحالية (عند الضغط على زر التحميل)
+    // تحليل الصفحة الحالية
     // ========================================
 
     fun analyzeCurrentPage(url: String) {
@@ -199,7 +199,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ========================================
-    // التنزيل الفعلي مع التقدم الحقيقي
+    // التنزيل الفعلي (إصلاح نهائي مع ربط الإعدادات)
     // ========================================
 
     fun startSpecificDownload(mode: DownloadMode, method: SubtitleMethod) {
@@ -210,8 +210,8 @@ class BrowserViewModel @Inject constructor(
                 val quality = currentState.selectedQuality ?: throw IllegalStateException("لم يتم اختيار الجودة")
                 val url = currentState.detectedVideoUrl ?: throw IllegalStateException("الرابط غير متوفر")
 
-                // قراءة صيغة الترجمة الافتراضية من الإعدادات
-                val subtitleFormat = preferences.subtitleFormatFlow.value.ifEmpty { "srt" }
+                // ✅ الإصلاح النهائي: قراءة الصيغة من DataStore باستخدام .first()
+                val subtitleFormat = appPreferencesRepository.subtitleFormatFlow.first()
 
                 val downloadId = UUID.randomUUID().toString()
                 val downloadDir = File(
