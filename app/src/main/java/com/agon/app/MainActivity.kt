@@ -57,13 +57,13 @@ import androidx.navigation.compose.rememberNavController
 import com.agon.app.ui.components.AppPermissionHandler
 import com.agon.app.ui.screens.DownloadsScreen
 import com.agon.app.ui.screens.FileManagerScreen
-import com.agon.app.ui.screens.HomeScreen
 import com.agon.app.ui.screens.ModelsScreen
 import com.agon.app.ui.screens.SettingsScreen
+import com.agon.app.ui.screens.browser.BrowserScreen // تم إضافة استيراد الشاشة الجديدة
 import com.agon.app.ui.theme.AgonAppTheme
+import com.agon.app.viewmodel.BrowserViewModel // تم إضافة استيراد ViewModel الجديد
 import com.agon.app.viewmodel.DownloadsViewModel
 import com.agon.app.viewmodel.FileManagerViewModel
-import com.agon.app.viewmodel.HomeViewModel
 import com.agon.app.viewmodel.ModelsViewModel
 import com.agon.app.viewmodel.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -124,9 +124,10 @@ fun MainApp() {
                 startDestination = "home",
                 modifier = Modifier.padding(innerPadding),
             ) {
+                // تم استبدال HomeScreen بـ BrowserScreen
                 composable("home") {
-                    val viewModel: HomeViewModel = hiltViewModel()
-                    HomeScreen(viewModel = viewModel)
+                    val viewModel: BrowserViewModel = hiltViewModel()
+                    BrowserScreen(viewModel = viewModel, navController = navController)
                 }
                 composable("downloads") {
                     val viewModel: DownloadsViewModel = hiltViewModel()
