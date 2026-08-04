@@ -45,6 +45,9 @@ class BrowserViewModel @Inject constructor(
     private val _state = MutableStateFlow(BrowserState())
     val state: StateFlow<BrowserState> = _state.asStateFlow()
 
+    private val _pendingNavigation = MutableStateFlow<String?>(null)
+    val pendingNavigation: StateFlow<String?> = _pendingNavigation.asStateFlow()
+
     init {
         // ربط حالة التبويبات بالحالة الشاملة
         viewModelScope.launch {
@@ -95,41 +98,41 @@ class BrowserViewModel @Inject constructor(
 
     fun onPageStarted(url: String) {
         tabManager.getActiveTab()?.let { tab ->
-            tabManager.updateTab(tab.id) { 
-                it.copy(isLoading = true, url = url, progress = 0) 
+            tabManager.updateTab(tab.id) {
+                it.copy(isLoading = true, url = url, progress = 0)
             }
         }
     }
 
     fun onPageProgressChanged(progress: Int) {
         tabManager.getActiveTab()?.let { tab ->
-            tabManager.updateTab(tab.id) { 
-                it.copy(progress = progress) 
+            tabManager.updateTab(tab.id) {
+                it.copy(progress = progress)
             }
         }
     }
 
     fun onPageFinished(url: String, title: String, favicon: String?) {
         tabManager.getActiveTab()?.let { tab ->
-            tabManager.updateTab(tab.id) { 
+            tabManager.updateTab(tab.id) {
                 it.copy(
-                    isLoading = false, 
-                    url = url, 
+                    isLoading = false,
+                    url = url,
                     title = title.ifBlank { extractDomain(url) },
                     favicon = favicon,
                     progress = 100
-                ) 
+                )
             }
         }
-        
+
         // محاولة اكتشاف فيديو في الصفحة
         detectVideoInPage(url)
     }
 
     fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
         tabManager.getActiveTab()?.let { tab ->
-            tabManager.updateTab(tab.id) { 
-                it.copy(canGoBack = canGoBack, canGoForward = canGoForward) 
+            tabManager.updateTab(tab.id) {
+                it.copy(canGoBack = canGoBack, canGoForward = canGoForward)
             }
         }
     }
@@ -139,9 +142,9 @@ class BrowserViewModel @Inject constructor(
     // ========================================
 
     private fun detectVideoInPage(url: String) {
-        // لا نحلل إذا كان هناك فيديو مكتشف بالفعل
+        // لا نحلل إذا كان هناك فيديو مكتشف بالفعل لنفس الرابط
         if (_state.value.detectedVideoUrl == url) return
-        
+
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 isAnalyzing = true,
@@ -152,7 +155,7 @@ class BrowserViewModel @Inject constructor(
 
             result.onSuccess { videoInfo ->
                 val method = determineSubtitleMethodUseCase(videoInfo.availableSubtitles)
-                
+
                 _state.value = _state.value.copy(
                     isAnalyzing = false,
                     detectedVideoUrl = url,
@@ -221,7 +224,7 @@ class BrowserViewModel @Inject constructor(
                     .replace(Regex("[^a-zA-Z0-9\\u0600-\\u06FF\\s]"), "_")
                     .replace(Regex("\\s+"), "_")
                     .take(50)
-                
+
                 val format = quality.format.ifEmpty { "mp4" }
                 val videoFileName = "${cleanTitle}.${format}"
                 val outputPath = File(downloadDir, videoFileName).absolutePath
@@ -303,36 +306,30 @@ class BrowserViewModel @Inject constructor(
         if (trimmed.isBlank()) return
 
         val url = if (isUrl(trimmed)) {
-            // إضافة https:// إذا لم تكن موجودة
             if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
                 trimmed
             } else {
                 "https://$trimmed"
             }
         } else {
-            // البحث في Google
             "https://www.google.com/search?q=${java.net.URLEncoder.encode(trimmed, "UTF-8")}"
         }
 
-        // إرسال رابط لل WebView عبر event
         _pendingNavigation.value = url
     }
-
-    private val _pendingNavigation = MutableStateFlow<String?>(null)
-    val pendingNavigation: StateFlow<String?> = _pendingNavigation.asStateFlow()
 
     fun clearPendingNavigation() {
         _pendingNavigation.value = null
     }
 
     private fun isUrl(text: String): Boolean {
-        return Patterns.WEB_URL.matcher(text).matches() || 
-               text.contains(".com") || 
-               text.contains(".org") || 
-               text.contains(".net") ||
-               text.contains(".io") ||
-               text.contains("youtube.com") ||
-               text.contains("youtu.be")
+        return Patterns.WEB_URL.matcher(text).matches() ||
+                text.contains(".com") ||
+                text.contains(".org") ||
+                text.contains(".net") ||
+                text.contains(".io") ||
+                text.contains("youtube.com") ||
+                text.contains("youtu.be")
     }
 
     // ========================================
