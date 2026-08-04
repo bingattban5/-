@@ -2,7 +2,7 @@ package com.agon.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState // <-- تم تعديل هذا السطر (إضافة core)
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Pause // <-- تمت إضافة هذا الاستيراد
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
@@ -104,7 +105,7 @@ fun ModelsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             GlassCard(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 elevation = 2.dp
@@ -195,7 +196,7 @@ fun ModelsScreen(
         ) {
             tabs.forEachIndexed { index, title ->
                 val isSelected = uiState.selectedTab == index
-                
+
                 val indicatorWidth by animateDpAsState(
                     targetValue = if (isSelected) 40.dp else 0.dp,
                     label = "tabIndicatorWidth"
@@ -473,7 +474,7 @@ private fun AiModelCard(
                         modifier = Modifier.size(24.dp)
                     )
                 }
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = model.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(text = model.sizeFormatted, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -515,8 +516,9 @@ private fun AiModelCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
                         )
+                        // ✅ التعديل هنا: تغيير الأيقونة من Close إلى Pause
                         IconButton(onClick = onPause, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.Close, contentDescription = "إيقاف", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Filled.Pause, contentDescription = "إيقاف مؤقت", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
                             Icon(Icons.Filled.Close, contentDescription = "إلغاء", tint = MaterialTheme.colorScheme.error)
