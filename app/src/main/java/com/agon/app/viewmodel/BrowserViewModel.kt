@@ -14,7 +14,7 @@ import com.agon.app.data.DownloadRepository
 import com.agon.app.data.DownloadStatus
 import com.agon.app.data.SubtitleMethod
 import com.agon.app.data.VideoQuality
-// تم إزالة استيراد TabManager من هنا عمداً لحل المشكلة
+import com.agon.app.data.browser.TabManager
 import com.agon.app.domain.usecase.AddDownloadUseCase
 import com.agon.app.domain.usecase.AnalyzeUrlUseCase
 import com.agon.app.domain.usecase.DetermineSubtitleMethodUseCase
@@ -35,7 +35,7 @@ import javax.inject.Inject
 @HiltViewModel
 class BrowserViewModel @Inject constructor(
     application: Application,
-    private val tabManager: com.agon.app.data.browser.TabManager, // التعديل الجذري: وضعنا المسار الكامل هنا
+    private val tabManager: TabManager,
     private val analyzeUrlUseCase: AnalyzeUrlUseCase,
     private val determineSubtitleMethodUseCase: DetermineSubtitleMethodUseCase,
     private val addDownloadUseCase: AddDownloadUseCase,
