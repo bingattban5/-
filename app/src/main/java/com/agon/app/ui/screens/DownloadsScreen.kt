@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -40,8 +41,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -53,7 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.agon.app.data.DownloadItem
 import com.agon.app.data.DownloadMode
 import com.agon.app.data.DownloadStatus
@@ -71,108 +74,129 @@ import com.agon.app.viewmodel.DownloadsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
-    viewModel: DownloadsViewModel = viewModel()
+    viewModel: DownloadsViewModel,
+    navController: NavHostController? = null
 ) {
     val downloads by viewModel.downloads.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val filteredDownloads by viewModel.filteredDownloads.collectAsState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Header
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                Icons.Filled.DownloadDone,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
-            Text(
-                text = "إدارة التنزيلات",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Stats: Mini Radial Progress Bars
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            RadialStatChip(
-                label = "الكل",
-                count = downloads.size,
-                total = downloads.size.coerceAtLeast(1),
-                icon = Icons.Filled.FilterList,
-                color = MaterialTheme.colorScheme.primary
-            )
-            RadialStatChip(
-                label = "مكتمل",
-                count = downloads.count { it.status == DownloadStatus.COMPLETED },
-                total = downloads.size.coerceAtLeast(1),
-                icon = Icons.Filled.CheckCircle,
-                color = SuccessGreen
-            )
-            RadialStatChip(
-                label = "نشط",
-                count = downloads.count { 
-                    it.status in listOf(
-                        DownloadStatus.DOWNLOADING, DownloadStatus.PAUSED, DownloadStatus.QUEUED,
-                        DownloadStatus.ANALYZING, DownloadStatus.EXTRACTING_SUBS, DownloadStatus.TRANSLATING
-                    ) 
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.DownloadDone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "إدارة التنزيلات",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 },
-                total = downloads.size.coerceAtLeast(1),
-                icon = Icons.Filled.Download,
-                color = MaterialTheme.colorScheme.primary
+                navigationIcon = {
+                    IconButton(onClick = {
+                        navController?.popBackStack("home", inclusive = false)
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "الرجوع للمتصفح",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Filter Elements: Segmented Control
-        SegmentedControl(
-            items = DownloadFilter.entries.toList(),
-            selectedItem = uiState.selectedFilter,
-            onItemSelected = { viewModel.setFilter(it) },
-            itemLabel = { it.label },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Downloads List or Empty State
-        if (filteredDownloads.isEmpty()) {
-            BreathingEmptyState(
-                icon = Icons.Filled.HourglassEmpty,
-                title = "لا توجد تنزيلات",
-                subtitle = "الصق رابط فيديو في الشاشة الرئيسية لبدء التحميل"
-            )
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
+            // Stats: Mini Radial Progress Bars
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(filteredDownloads, key = { it.id }) { item ->
-                    DownloadItemCard(
-                        item = item,
-                        onDelete = { viewModel.requestDelete(item.id) },
-                        onCancel = { viewModel.cancelDownload(item.id) },
-                        onRetry = { viewModel.retryDownload(item.id) },
-                        onShowSrt = { viewModel.showSrtPreview(item) }
-                    )
+                RadialStatChip(
+                    label = "الكل",
+                    count = downloads.size,
+                    total = downloads.size.coerceAtLeast(1),
+                    icon = Icons.Filled.FilterList,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                RadialStatChip(
+                    label = "مكتمل",
+                    count = downloads.count { it.status == DownloadStatus.COMPLETED },
+                    total = downloads.size.coerceAtLeast(1),
+                    icon = Icons.Filled.CheckCircle,
+                    color = SuccessGreen
+                )
+                RadialStatChip(
+                    label = "نشط",
+                    count = downloads.count { 
+                        it.status in listOf(
+                            DownloadStatus.DOWNLOADING, DownloadStatus.PAUSED, DownloadStatus.QUEUED,
+                            DownloadStatus.ANALYZING, DownloadStatus.EXTRACTING_SUBS, DownloadStatus.TRANSLATING
+                        ) 
+                    },
+                    total = downloads.size.coerceAtLeast(1),
+                    icon = Icons.Filled.Download,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Filter Elements: Segmented Control
+            SegmentedControl(
+                items = DownloadFilter.entries.toList(),
+                selectedItem = uiState.selectedFilter,
+                onItemSelected = { viewModel.setFilter(it) },
+                itemLabel = { it.label },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Downloads List or Empty State
+            if (filteredDownloads.isEmpty()) {
+                BreathingEmptyState(
+                    icon = Icons.Filled.HourglassEmpty,
+                    title = "لا توجد تنزيلات",
+                    subtitle = "الصق رابط فيديو في الشاشة الرئيسية لبدء التحميل"
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(filteredDownloads, key = { it.id }) { item ->
+                        DownloadItemCard(
+                            item = item,
+                            onDelete = { viewModel.requestDelete(item.id) },
+                            onCancel = { viewModel.cancelDownload(item.id) },
+                            onRetry = { viewModel.retryDownload(item.id) },
+                            onShowSrt = { viewModel.showSrtPreview(item) }
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
-                item { Spacer(modifier = Modifier.height(16.dp)) }
             }
         }
     }
@@ -364,7 +388,7 @@ private fun DownloadItemCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    
+
                     if (item.status == DownloadStatus.DOWNLOADING) {
                         OutlinedButton(
                             onClick = onCancel,
