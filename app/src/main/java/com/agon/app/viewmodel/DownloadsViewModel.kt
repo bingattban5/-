@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -40,7 +42,7 @@ class DownloadsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository
 ) : AndroidViewModel(application) {
 
-    // قراءة التنزيلات بشكل حي من قاعدة البيانات، مما يضمن وصول أخطاء الـ Worker فوراً للواجهة
+    // قراءة التنزيلات بشكل حي من قاعدة البيانات
     val downloads = getDownloadsUseCase().stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -50,14 +52,26 @@ class DownloadsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
 
+    // قائمة مفلترة حية: تُعاد حسابها تلقائياً عند تغيير الفلتر أو تحديث قاعدة البيانات
+    val filteredDownloads: StateFlow<List<DownloadItem>> = combine(
+        getDownloadsUseCase(),
+        _uiState.map { it.selectedFilter }
+    ) { all, filter ->
+        applyFilter(all, filter)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
     fun setFilter(filter: DownloadFilter) {
         _uiState.value = _uiState.value.copy(selectedFilter = filter)
     }
 
-    fun filterDownloads(downloads: List<DownloadItem>): List<DownloadItem> {
-        return when (_uiState.value.selectedFilter) {
-            DownloadFilter.ALL -> downloads
-            DownloadFilter.ACTIVE -> downloads.filter {
+    private fun applyFilter(list: List<DownloadItem>, filter: DownloadFilter): List<DownloadItem> {
+        return when (filter) {
+            DownloadFilter.ALL -> list
+            DownloadFilter.ACTIVE -> list.filter {
                 it.status in listOf(
                     DownloadStatus.DOWNLOADING,
                     DownloadStatus.PAUSED,
@@ -67,9 +81,18 @@ class DownloadsViewModel @Inject constructor(
                     DownloadStatus.TRANSLATING
                 )
             }
-            DownloadFilter.COMPLETED -> downloads.filter { it.status == DownloadStatus.COMPLETED }
-            DownloadFilter.FAILED -> downloads.filter { it.status == DownloadStatus.FAILED || it.status == DownloadStatus.CANCELLED }
+            DownloadFilter.COMPLETED -> list.filter { it.status == DownloadStatus.COMPLETED }
+            // شرط مقوّى: يشمل أي عنصر فاشل أو ملغي أو يحمل رسالة خطأ عالقة
+            DownloadFilter.FAILED -> list.filter {
+                it.status == DownloadStatus.FAILED ||
+                it.status == DownloadStatus.CANCELLED ||
+                (it.errorMessage.isNotEmpty() && it.status != DownloadStatus.COMPLETED)
+            }
         }
+    }
+
+    fun filterDownloads(downloads: List<DownloadItem>): List<DownloadItem> {
+        return applyFilter(downloads, _uiState.value.selectedFilter)
     }
 
     fun requestDelete(id: String) {
@@ -83,7 +106,6 @@ class DownloadsViewModel @Inject constructor(
     fun confirmDelete() {
         val id = _uiState.value.showDeleteConfirm ?: return
         viewModelScope.launch {
-            // Cancel WorkManager task if active
             val download = downloadRepository.getDownloadById(id)
             if (download != null && download.workManagerId.isNotEmpty()) {
                 try {
@@ -105,7 +127,6 @@ class DownloadsViewModel @Inject constructor(
                         .cancelWorkById(UUID.fromString(download.workManagerId))
                 } catch (_: Exception) {}
             }
-            // تمرير رسالة واضحة للواجهة توضح سبب الفشل (الإلغاء)
             downloadRepository.updateDownload(download.copy(
                 status = DownloadStatus.CANCELLED,
                 errorMessage = "تم الإلغاء بواسطة المستخدم",
@@ -117,7 +138,6 @@ class DownloadsViewModel @Inject constructor(
     fun retryDownload(id: String) {
         viewModelScope.launch {
             val download = downloadRepository.getDownloadById(id) ?: return@launch
-            // تصفير الأخطاء والتقدم للبدء من جديد
             downloadRepository.updateDownload(download.copy(
                 status = DownloadStatus.QUEUED,
                 progress = 0,
