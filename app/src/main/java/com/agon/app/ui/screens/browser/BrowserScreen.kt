@@ -12,23 +12,27 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavHostController
 import com.agon.app.data.DownloadMode
 import com.agon.app.data.SubtitleMethod
+import com.agon.app.ui.components.StackedCirclesMenu
 import com.agon.app.ui.screens.browser.components.*
 import com.agon.app.viewmodel.BrowserViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun BrowserScreen(
     viewModel: BrowserViewModel,
@@ -41,6 +45,7 @@ fun BrowserScreen(
 
     var webView by remember { mutableStateOf<WebView?>(null) }
 
+    // معالجة رسائل الخطأ والنجاح
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -55,6 +60,7 @@ fun BrowserScreen(
         }
     }
 
+    // الاستماع لطلبات التنقل من شريط العنوان
     LaunchedEffect(pendingNavigation) {
         pendingNavigation?.let { url ->
             webView?.loadUrl(url)
@@ -62,6 +68,7 @@ fun BrowserScreen(
         }
     }
 
+    // ربط زر الرجوع في النظام بالرجوع داخل WebView
     BackHandler(enabled = state.canGoBack) {
         webView?.goBack()
     }
@@ -88,7 +95,7 @@ fun BrowserScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // WebView الفعلي مع ضبط ملاءمة الشاشة
+                // WebView الفعلي
                 BrowserWebView(
                     currentUrl = state.activeTab?.url ?: "https://www.google.com",
                     onWebViewCreated = { webView = it },
@@ -107,75 +114,71 @@ fun BrowserScreen(
                     }
                 )
 
-                // زر التحميل العائم - دائماً ظاهر
-                FloatingActionButton(
-                    onClick = {
-                        // إذا لم يكن هناك فيديو مكتشف، نحلل الرابط الحالي
-                        if (state.videoInfo == null) {
+                // ==========================================
+                // زر التحميل العائم (FAB) - أنيق، عصري، ودائم الظهور
+                // ==========================================
+                AnimatedVisibility(
+                    visible = true,
+                    enter = scaleIn(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                    exit = scaleOut(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+                ) {
+                    FloatingActionButton(
+                        onClick = {
                             val currentUrl = state.activeTab?.url
-                            if (currentUrl != null && currentUrl.isNotBlank()) {
+                            if (!currentUrl.isNullOrBlank()) {
+                                // تحليل الرابط فور الضغط لاستخراج الفيديو والترجمة
                                 viewModel.analyzeCurrentPage(currentUrl)
                             }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(20.dp)
+                            .size(64.dp)
+                            .shadow(
+                                elevation = 12.dp,
+                                shape = CircleShape,
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            ),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = CircleShape
+                    ) {
+                        if (state.isAnalyzing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 3.dp
+                            )
                         } else {
-                            viewModel.showVideoSheet()
+                            Icon(
+                                Icons.Filled.Download,
+                                contentDescription = "تحليل وتحميل",
+                                modifier = Modifier.size(30.dp)
+                            )
                         }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                        .size(64.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = MaterialTheme.shapes.extraLarge
-                ) {
-                    if (state.isAnalyzing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(32.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 3.dp
-                        )
-                    } else {
-                        Icon(
-                            Icons.Filled.Download,
-                            contentDescription = "تحميل الفيديو",
-                            modifier = Modifier.size(32.dp)
-                        )
                     }
                 }
 
-                // القائمة الرئيسية
-                DropdownMenu(
-                    expanded = state.showMainMenu,
-                    onDismissRequest = { viewModel.dismissMainMenu() },
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("التنزيلات") },
-                        onClick = {
+                // ==========================================
+                // القائمة العصرية (الدوائر المتسلسلة)
+                // ==========================================
+                if (state.showMainMenu) {
+                    StackedCirclesMenu(
+                        expanded = true,
+                        onDismiss = { viewModel.dismissMainMenu() },
+                        onNavigate = { route ->
                             viewModel.dismissMainMenu()
-                            navController?.navigate("downloads")
-                        },
-                        leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("النماذج") },
-                        onClick = {
-                            viewModel.dismissMainMenu()
-                            navController?.navigate("models")
-                        },
-                        leadingIcon = { Icon(Icons.Filled.Memory, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("الإعدادات") },
-                        onClick = {
-                            viewModel.dismissMainMenu()
-                            navController?.navigate("settings")
-                        },
-                        leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) }
+                            navController?.navigate(route)
+                        }
                     )
                 }
             }
         }
+
+        // ==========================================
+        // النوافذ المنبثقة (Bottom Sheets & Dialogs)
+        // ==========================================
 
         // قائمة التبويبات
         if (state.showTabsList) {
@@ -190,7 +193,7 @@ fun BrowserScreen(
             )
         }
 
-        // صفحة بيانات الفيديو
+        // صفحة بيانات الفيديو (تظهر بعد التحليل الناجح)
         if (state.showVideoSheet && state.videoInfo != null) {
             VideoDetectedSheet(
                 state = state,
@@ -265,13 +268,11 @@ private fun BrowserWebView(
                     mediaPlaybackRequiresUserGesture = false
                     allowContentAccess = true
                     allowFileAccess = true
-                    // ضبط ملاءمة المحتوى للشاشة
                     layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
                     defaultTextEncodingName = "UTF-8"
                     setSupportMultipleWindows(false)
                 }
 
-                // WebViewClient
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                         return false
@@ -291,19 +292,10 @@ private fun BrowserWebView(
                             // إخفاء عناصر YouTube السفلية عبر JavaScript
                             val hideYouTubeUI = """
                                 javascript:(function() {
-                                    // إخفاء شريط التنقل السفلي لـ YouTube
                                     var elements = document.querySelectorAll('#app-bar-guide-menu, .ytd-app, ytd-mini-guide-renderer, #guide-button, ytd-mini-guide-entry-renderer');
                                     elements.forEach(function(el) { el.style.display = 'none'; });
-                                    
-                                    // إخفاء شريط التنقل السفلي العام
                                     var bottomNavs = document.querySelectorAll('[class*="bottom-nav"], [class*="BottomNavigation"], ytd-app > #content.ytd-app');
-                                    bottomNavs.forEach(function(el) { 
-                                        if (el && el.style) el.style.paddingBottom = '0px'; 
-                                    });
-                                    
-                                    // إخفاء أي عنصر يحتوي على أيقونة المنزل أو التنقل السفلي
-                                    var navItems = document.querySelectorAll('ytd-section-list-renderer, ytd-rich-section-renderer');
-                                    navItems.forEach(function(el) { el.style.marginBottom = '0px'; });
+                                    bottomNavs.forEach(function(el) { if (el && el.style) el.style.paddingBottom = '0px'; });
                                 })();
                             """.trimIndent()
                             
@@ -315,7 +307,6 @@ private fun BrowserWebView(
                     }
                 }
 
-                // WebChromeClient
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
                         super.onProgressChanged(view, newProgress)
@@ -323,7 +314,6 @@ private fun BrowserWebView(
                     }
                 }
 
-                // الضغط المطول
                 setOnLongClickListener {
                     val result = hitTestResult
                     if (result.type == android.webkit.WebView.HitTestResult.SRC_ANCHOR_TYPE ||
