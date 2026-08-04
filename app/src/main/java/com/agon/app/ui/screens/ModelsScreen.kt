@@ -25,13 +25,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Pause // <-- تمت إضافة هذا الاستيراد
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
@@ -42,16 +43,17 @@ import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +65,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import com.agon.app.data.AiModel
 import com.agon.app.data.EngineInfo
 import com.agon.app.ui.components.CircularProgressDownloadButton
@@ -74,200 +77,229 @@ import com.agon.app.ui.theme.WarningAmber
 import com.agon.app.viewmodel.ModelsViewModel
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelsScreen(
-    viewModel: ModelsViewModel
+    viewModel: ModelsViewModel,
+    navController: NavHostController? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val tabs = listOf("محرك الاستخراج", "نماذج Whisper", "حزم الترجمة")
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    Icons.Filled.Dns,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Text(
-                    text = "النماذج والمحركات",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(
-                text = "إدارة محركات الاستخراج ونماذج الذكاء الاصطناعي المحلية",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            GlassCard(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                elevation = 2.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Storage,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = "المساحة المستخدمة:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = uiState.totalStorageFormatted,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        AnimatedVisibility(
-            visible = uiState.errorMessage != null || uiState.successMessage != null,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            val isError = uiState.errorMessage != null
-            val message = uiState.errorMessage ?: uiState.successMessage ?: ""
-            val bgColor = if (isError) MaterialTheme.colorScheme.errorContainer else SuccessGreen.copy(alpha = 0.15f)
-            val contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer else SuccessGreen
-
-            GlassCard(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp),
-                elevation = 0.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
                     Row(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = if (isError) Icons.Filled.Warning else Icons.Filled.CheckCircle,
+                            Icons.Filled.Dns,
                             contentDescription = null,
-                            tint = contentColor,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "النماذج والمحركات",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        navController?.popBackStack("home", inclusive = false)
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "الرجوع للمتصفح",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "إدارة محركات الاستخراج ونماذج الذكاء الاصطناعي المحلية",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    elevation = 2.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Storage,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                         Text(
-                            text = message,
+                            text = "المساحة المستخدمة:",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = contentColor
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = uiState.totalStorageFormatted,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    IconButton(onClick = { viewModel.clearMessage() }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.Close, contentDescription = "إغلاق", tint = contentColor, modifier = Modifier.size(18.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            AnimatedVisibility(
+                visible = uiState.errorMessage != null || uiState.successMessage != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                val isError = uiState.errorMessage != null
+                val message = uiState.errorMessage ?: uiState.successMessage ?: ""
+                val contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer else SuccessGreen
+
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                    elevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isError) Icons.Filled.Warning else Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                tint = contentColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = contentColor
+                            )
+                        }
+                        IconButton(onClick = { viewModel.clearMessage() }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = "إغلاق", tint = contentColor, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+
+                LaunchedEffect(message) {
+                    delay(5000)
+                    viewModel.clearMessage()
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    val isSelected = uiState.selectedTab == index
+
+                    val indicatorWidth by animateDpAsState(
+                        targetValue = if (isSelected) 40.dp else 0.dp,
+                        label = "tabIndicatorWidth"
+                    )
+                    val indicatorColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        label = "tabIndicatorColor"
+                    )
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "tabTextColor"
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { viewModel.selectTab(index) }
+                            .padding(vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = textColor
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(indicatorWidth)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .shadow(
+                                    elevation = if (isSelected) 6.dp else 0.dp,
+                                    shape = RoundedCornerShape(2.dp),
+                                    ambientColor = indicatorColor,
+                                    spotColor = indicatorColor
+                                )
+                                .background(indicatorColor)
+                        )
                     }
                 }
             }
 
-            LaunchedEffect(message) {
-                delay(5000)
-                viewModel.clearMessage()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            when (uiState.selectedTab) {
+                0 -> YtDlpSection(
+                    engine = uiState.ytDlpEngine,
+                    onCheckUpdate = viewModel::checkYtDlpUpdate,
+                    onUpdate = viewModel::updateYtDlp,
+                    onReinstall = viewModel::reinstallYtDlp
+                )
+                1 -> WhisperSection(
+                    models = uiState.aiModels.filter { it.type == "whisper" },
+                    downloadingModels = uiState.downloadingModels,
+                    onDownload = viewModel::downloadModel,
+                    onDelete = viewModel::deleteModel,
+                    onCancelDownload = viewModel::cancelDownload,
+                    onPauseDownload = viewModel::pauseDownload,
+                    onResumeDownload = viewModel::resumeDownload
+                )
+                2 -> ArgosSection(
+                    models = uiState.aiModels.filter { it.type == "argos" },
+                    downloadingModels = uiState.downloadingModels,
+                    onDownload = viewModel::downloadModel,
+                    onDelete = viewModel::deleteModel,
+                    onCancelDownload = viewModel::cancelDownload,
+                    onPauseDownload = viewModel::pauseDownload,
+                    onResumeDownload = viewModel::resumeDownload
+                )
             }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            tabs.forEachIndexed { index, title ->
-                val isSelected = uiState.selectedTab == index
-
-                val indicatorWidth by animateDpAsState(
-                    targetValue = if (isSelected) 40.dp else 0.dp,
-                    label = "tabIndicatorWidth"
-                )
-                val indicatorColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    label = "tabIndicatorColor"
-                )
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    label = "tabTextColor"
-                )
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { viewModel.selectTab(index) }
-                        .padding(vertical = 14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = textColor
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .width(indicatorWidth)
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .shadow(
-                                elevation = if (isSelected) 6.dp else 0.dp,
-                                shape = RoundedCornerShape(2.dp),
-                                ambientColor = indicatorColor,
-                                spotColor = indicatorColor
-                            )
-                            .background(indicatorColor)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        when (uiState.selectedTab) {
-            0 -> YtDlpSection(
-                engine = uiState.ytDlpEngine,
-                onCheckUpdate = viewModel::checkYtDlpUpdate,
-                onUpdate = viewModel::updateYtDlp,
-                onReinstall = viewModel::reinstallYtDlp
-            )
-            1 -> WhisperSection(
-                models = uiState.aiModels.filter { it.type == "whisper" },
-                downloadingModels = uiState.downloadingModels,
-                onDownload = viewModel::downloadModel,
-                onDelete = viewModel::deleteModel,
-                onCancelDownload = viewModel::cancelDownload,
-                onPauseDownload = viewModel::pauseDownload,
-                onResumeDownload = viewModel::resumeDownload
-            )
-            2 -> ArgosSection(
-                models = uiState.aiModels.filter { it.type == "argos" },
-                downloadingModels = uiState.downloadingModels,
-                onDownload = viewModel::downloadModel,
-                onDelete = viewModel::deleteModel,
-                onCancelDownload = viewModel::cancelDownload,
-                onPauseDownload = viewModel::pauseDownload,
-                onResumeDownload = viewModel::resumeDownload
-            )
         }
     }
 }
@@ -323,7 +355,7 @@ private fun YtDlpSection(
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FilledTonalButton(onClick = onCheckUpdate, modifier = Modifier.weight(1f), enabled = !engine.isChecking) {
-                            if (engine.isChecking) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                            if (engine.isChecking) androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("فحص التحديثات", style = MaterialTheme.typography.labelLarge)
                         }
@@ -516,7 +548,6 @@ private fun AiModelCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
                         )
-                        // ✅ التعديل هنا: تغيير الأيقونة من Close إلى Pause
                         IconButton(onClick = onPause, modifier = Modifier.size(36.dp)) {
                             Icon(Icons.Filled.Pause, contentDescription = "إيقاف مؤقت", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
