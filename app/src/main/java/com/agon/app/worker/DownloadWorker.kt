@@ -21,9 +21,7 @@ import com.agon.app.engine.WhisperEngine
 import com.agon.app.engine.YtDlpEngine
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 
@@ -93,16 +91,16 @@ class DownloadWorker @AssistedInject constructor(
     ): Result {
         updateStatus(DownloadStatus.DOWNLOADING, 0, "0 B", "", "")
 
-        var errorMessage: String? = null
+        var capturedError: String? = null
 
         try {
             ytDlpEngine.downloadVideo(url, formatId, outputPath)
                 .catch { e ->
-                    errorMessage = e.message
+                    capturedError = e.message
                 }
                 .collect { progress ->
                     if (progress.progress == -1) {
-                        errorMessage = progress.message
+                        capturedError = progress.message
                     } else {
                         val stats = calculateStats(progress.progress)
                         updateStatus(
@@ -116,8 +114,9 @@ class DownloadWorker @AssistedInject constructor(
                     }
                 }
 
-            if (errorMessage != null) {
-                return failureResult(errorMessage)
+            val errorToCheck = capturedError
+            if (errorToCheck != null) {
+                return failureResult(errorToCheck)
             }
 
             val outputFile = File(outputPath)
@@ -150,16 +149,16 @@ class DownloadWorker @AssistedInject constructor(
         updateStatus(DownloadStatus.DOWNLOADING, 0, "0 B", "", "")
         updateNotification(0, "جاري تحميل الفيديو...")
 
-        var errorMessage: String? = null
+        var capturedError: String? = null
 
         try {
             ytDlpEngine.downloadVideo(url, formatId, outputPath)
                 .catch { e ->
-                    errorMessage = e.message
+                    capturedError = e.message
                 }
                 .collect { progress ->
                     if (progress.progress == -1) {
-                        errorMessage = progress.message
+                        capturedError = progress.message
                     } else {
                         val stats = calculateStats(progress.progress)
                         updateStatus(
@@ -173,8 +172,9 @@ class DownloadWorker @AssistedInject constructor(
                     }
                 }
 
-            if (errorMessage != null) {
-                return failureResult(errorMessage)
+            val errorToCheck = capturedError
+            if (errorToCheck != null) {
+                return failureResult(errorToCheck)
             }
 
             val videoFile = File(outputPath)
@@ -499,7 +499,7 @@ class DownloadWorker @AssistedInject constructor(
             
             trimmedError.contains("Whisper", ignoreCase = true) || 
             trimmedError.contains("transcribe", ignoreCase = true) ->
-                " فشل إنشاء الترجمة بالذكاء الاصطناعي\n" +
+                "❌ فشل إنشاء الترجمة بالذكاء الاصطناعي\n" +
                 "السبب: نموذج Whisper غير مثبت أو الذاكرة غير كافية\n" +
                 "الحل: اذهب إلى 'النماذج' وحمّل نموذج Whisper المناسب"
             
@@ -526,7 +526,7 @@ class DownloadWorker @AssistedInject constructor(
             
             trimmedError.contains("No space", ignoreCase = true) || 
             trimmedError.contains("disk full", ignoreCase = true) ->
-                " المساحة ممتلئة\n" +
+                "❌ المساحة ممتلئة\n" +
                 "السبب: لا توجد مساحة كافية\n" +
                 "الحل: احذف بعض الملفات وحاول مرة أخرى"
             
