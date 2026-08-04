@@ -39,10 +39,8 @@ fun BrowserScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // WebView ref للإشارة إليه من الأحداث الخارجية
     var webView by remember { mutableStateOf<WebView?>(null) }
 
-    // معالجة رسائل الخطأ والنجاح
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -57,7 +55,6 @@ fun BrowserScreen(
         }
     }
 
-    // الاستماع لطلبات التنقل من شريط العنوان
     LaunchedEffect(pendingNavigation) {
         pendingNavigation?.let { url ->
             webView?.loadUrl(url)
@@ -65,7 +62,6 @@ fun BrowserScreen(
         }
     }
 
-    // ربط زر الرجوع في النظام بالرجوع داخل WebView
     BackHandler(enabled = state.canGoBack) {
         webView?.goBack()
     }
@@ -92,7 +88,7 @@ fun BrowserScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // WebView الفعلي
+                // WebView الفعلي مع ضبط ملاءمة الشاشة
                 BrowserWebView(
                     currentUrl = state.activeTab?.url ?: "https://www.google.com",
                     onWebViewCreated = { webView = it },
@@ -111,35 +107,43 @@ fun BrowserScreen(
                     }
                 )
 
-                // زر التحميل العائم (FAB)
-                if (state.videoInfo != null) {
-                    FloatingActionButton(
-                        onClick = { viewModel.showVideoSheet() },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp)
-                            .size(64.dp),
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = MaterialTheme.shapes.extraLarge
-                    ) {
-                        if (state.isAnalyzing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 3.dp
-                            )
+                // زر التحميل العائم - دائماً ظاهر
+                FloatingActionButton(
+                    onClick = {
+                        // إذا لم يكن هناك فيديو مكتشف، نحلل الرابط الحالي
+                        if (state.videoInfo == null) {
+                            val currentUrl = state.activeTab?.url
+                            if (currentUrl != null && currentUrl.isNotBlank()) {
+                                viewModel.analyzeCurrentPage(currentUrl)
+                            }
                         } else {
-                            Icon(
-                                Icons.Filled.Download,
-                                contentDescription = "تحميل الفيديو",
-                                modifier = Modifier.size(32.dp)
-                            )
+                            viewModel.showVideoSheet()
                         }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .size(64.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
+                    if (state.isAnalyzing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Download,
+                            contentDescription = "تحميل الفيديو",
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
                 }
 
-                // القائمة الرئيسية (DropdownMenu)
+                // القائمة الرئيسية
                 DropdownMenu(
                     expanded = state.showMainMenu,
                     onDismissRequest = { viewModel.dismissMainMenu() },
@@ -261,12 +265,15 @@ private fun BrowserWebView(
                     mediaPlaybackRequiresUserGesture = false
                     allowContentAccess = true
                     allowFileAccess = true
+                    // ضبط ملاءمة المحتوى للشاشة
+                    layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                    defaultTextEncodingName = "UTF-8"
+                    setSupportMultipleWindows(false)
                 }
 
-                // WebViewClient لالتقاط أحداث التنقل
+                // WebViewClient
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        // نمنع فتح الروابط خارج التطبيق، نفتحها داخل WebView
                         return false
                     }
 
@@ -280,13 +287,35 @@ private fun BrowserWebView(
                         if (url != null) {
                             val title = view?.title ?: ""
                             val faviconUrl = "https://www.google.com/s2/favicons?domain=${try { java.net.URL(url).host } catch (e: Exception) { "" }}&sz=64"
+                            
+                            // إخفاء عناصر YouTube السفلية عبر JavaScript
+                            val hideYouTubeUI = """
+                                javascript:(function() {
+                                    // إخفاء شريط التنقل السفلي لـ YouTube
+                                    var elements = document.querySelectorAll('#app-bar-guide-menu, .ytd-app, ytd-mini-guide-renderer, #guide-button, ytd-mini-guide-entry-renderer');
+                                    elements.forEach(function(el) { el.style.display = 'none'; });
+                                    
+                                    // إخفاء شريط التنقل السفلي العام
+                                    var bottomNavs = document.querySelectorAll('[class*="bottom-nav"], [class*="BottomNavigation"], ytd-app > #content.ytd-app');
+                                    bottomNavs.forEach(function(el) { 
+                                        if (el && el.style) el.style.paddingBottom = '0px'; 
+                                    });
+                                    
+                                    // إخفاء أي عنصر يحتوي على أيقونة المنزل أو التنقل السفلي
+                                    var navItems = document.querySelectorAll('ytd-section-list-renderer, ytd-rich-section-renderer');
+                                    navItems.forEach(function(el) { el.style.marginBottom = '0px'; });
+                                })();
+                            """.trimIndent()
+                            
+                            view?.evaluateJavascript(hideYouTubeUI, null)
+                            
                             onPageFinished(url, title, faviconUrl)
                             onNavigationStateChange(view?.canGoBack() ?: false, view?.canGoForward() ?: false)
                         }
                     }
                 }
 
-                // WebChromeClient لالتقاط تقدم التحميل
+                // WebChromeClient
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
                         super.onProgressChanged(view, newProgress)
@@ -294,7 +323,7 @@ private fun BrowserWebView(
                     }
                 }
 
-                // الضغط المطول على الروابط
+                // الضغط المطول
                 setOnLongClickListener {
                     val result = hitTestResult
                     if (result.type == android.webkit.WebView.HitTestResult.SRC_ANCHOR_TYPE ||
@@ -313,7 +342,6 @@ private fun BrowserWebView(
         },
         modifier = Modifier.fillMaxSize(),
         update = { webView ->
-            // تحميل رابط جديد عند تغيير التبويب
             if (currentUrl != lastLoadedUrl && currentUrl.isNotBlank()) {
                 val webViewCurrentUrl = webView.url
                 if (webViewCurrentUrl != currentUrl) {
