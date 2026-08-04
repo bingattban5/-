@@ -47,11 +47,11 @@ fun BrowserTopBar(
     onMenuClick: () -> Unit
 ) {
     val activeTab = state.activeTab
-    var searchText by remember(activeTab?.url) {
-        mutableStateOf(activeTab?.url ?: "")
+    var searchText by remember(activeTab?.url) { 
+        mutableStateOf(activeTab?.url ?: "") 
     }
     var isFocused by remember { mutableStateOf(false) }
-
+    
     val glowColor = MaterialTheme.colorScheme.primary.copy(
         alpha = if (isFocused) 0.3f else 0f
     )
@@ -90,7 +90,7 @@ fun BrowserTopBar(
                 }
             }
 
-            // شريط البحث الدائري
+            // شريط البحث/الرابط الدائري - يظهر الرابط بوضوح
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -102,7 +102,7 @@ fun BrowserTopBar(
                     )
                     .clip(RoundedCornerShape(50))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .height(44.dp)
+                    .height(48.dp)
             ) {
                 OutlinedTextField(
                     value = searchText,
@@ -110,16 +110,18 @@ fun BrowserTopBar(
                     modifier = Modifier
                         .fillMaxSize()
                         .onFocusChanged { isFocused = it.isFocused },
-                    placeholder = {
+                    placeholder = { 
                         Text(
                             "ابحث أو أدخل رابطاً...",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        ) 
                     },
                     leadingIcon = {
                         Icon(
-                            if (activeTab?.isLoading == true) Icons.Filled.Refresh
-                            else Icons.Filled.Search,
+                            if (activeTab?.isLoading == true) Icons.Filled.Refresh 
+                            else Icons.Filled.Public,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = if (activeTab?.isLoading == true) {
@@ -152,7 +154,9 @@ fun BrowserTopBar(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent
                     ),
-                    textStyle = MaterialTheme.typography.bodyMedium,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp
+                    ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(
                         onGo = {
@@ -176,14 +180,14 @@ fun BrowserTopBar(
                 }
             }
 
-            // عداد التبويبات
+            // عداد التبويبات المفتوحة - يحل محل أيقونة YouTube
             TabsCounterButton(
                 count = state.tabsCount,
                 favicon = activeTab?.favicon,
                 onClick = onTabsClick
             )
 
-            // زر القائمة
+            // زر القائمة (ثلاث نقاط)
             IconButton(
                 onClick = onMenuClick,
                 modifier = Modifier.size(40.dp)
@@ -206,45 +210,41 @@ private fun TabsCounterButton(
 ) {
     Surface(
         modifier = Modifier
-            .size(40.dp)
+            .size(44.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = Color.Transparent
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
     ) {
         Box(
             contentAlignment = Alignment.Center
         ) {
-            // إذا كان لدينا favicon، نعرضه كخلفية
-            if (favicon != null) {
+            // إذا كان لدينا favicon للتبويب النشط، نعرضه كخلفية
+            if (favicon != null && count > 0) {
                 AsyncImage(
                     model = favicon,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
-            } else {
-                // مربع برقم التبويبات
+                // طبقة شفافة فوق الصورة
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .border(
-                            width = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(6.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (count > 99) "99+" else count.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.3f))
+                )
             }
+            
+            // رقم التبويبات
+            Text(
+                text = if (count > 99) "99+" else count.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }
