@@ -87,6 +87,14 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
+    // عند إلغاء المهمة من WorkManager: ألغِ الإشعار وحدّث الحالة
+    override suspend fun onCanceled() {
+        notificationManager.cancel(notificationId)
+        if (downloadId.isNotEmpty()) {
+            downloadRepository.updateProgress(downloadId, DownloadStatus.CANCELLED, 0, "", "", "")
+        }
+    }
+
     private suspend fun downloadVideoOnly(
         url: String,
         formatId: String,
@@ -102,7 +110,6 @@ class DownloadWorker @AssistedInject constructor(
                     errorMessage = e.message
                 }
                 .collect { progress ->
-                    // Handle inner yt-dlp string errors parsed from stdout
                     if (progress.progress == -1) {
                         errorMessage = progress.message
                     } else {
@@ -133,8 +140,9 @@ class DownloadWorker @AssistedInject constructor(
             }
 
             updateStatus(DownloadStatus.COMPLETED, 100, outputFile.length().toString(), "", "")
-            updateNotification(100, "Download completed")
-            
+            // إشعار نهائي قابل للمسح بدلاً من إشعار عالق
+            showFinalNotification("اكتمل التحميل بنجاح")
+
             return Result.success(
                 Data.Builder()
                     .putString(KEY_OUTPUT_PATH, outputFile.absolutePath)
@@ -192,7 +200,6 @@ class DownloadWorker @AssistedInject constructor(
                 return failureResult("Video file was not created. Path: $outputPath")
             }
 
-            // Step 2: Download subtitle based on method
             updateStatus(DownloadStatus.EXTRACTING_SUBS, 100, "", "", "")
             updateNotification(100, "Extracting subtitles...")
 
@@ -255,7 +262,7 @@ class DownloadWorker @AssistedInject constructor(
             return if (subtitleResult.isSuccess) {
                 val subtitleFile = subtitleResult.getOrNull()!!
                 updateStatus(DownloadStatus.COMPLETED, 100, "", "", "")
-                updateNotification(100, "Download completed")
+                showFinalNotification("اكتمل تحميل الفيديو والترجمة")
                 Result.success(
                     Data.Builder()
                         .putString(KEY_OUTPUT_PATH, videoFile.absolutePath)
@@ -265,7 +272,7 @@ class DownloadWorker @AssistedInject constructor(
             } else {
                 val error = subtitleResult.exceptionOrNull()
                 updateStatus(DownloadStatus.COMPLETED, 100, "", "", "")
-                updateNotification(100, "Video downloaded (subtitle failed)")
+                showFinalNotification("تم تحميل الفيديو (تعذرت الترجمة)")
                 Result.success(
                     Data.Builder()
                         .putString(KEY_OUTPUT_PATH, videoFile.absolutePath)
@@ -367,7 +374,7 @@ class DownloadWorker @AssistedInject constructor(
         return if (subtitleResult.isSuccess) {
             val subtitleFile = subtitleResult.getOrNull()!!
             updateStatus(DownloadStatus.COMPLETED, 100, "", "", "")
-            updateNotification(100, "Subtitle downloaded")
+            showFinalNotification("اكتمل تحميل الترجمة")
             Result.success(
                 Data.Builder()
                     .putString(KEY_SUBTITLE_PATH, subtitleFile.absolutePath)
@@ -382,7 +389,6 @@ class DownloadWorker @AssistedInject constructor(
 
     private fun shouldRetry(error: Throwable): Boolean {
         val message = error.message ?: return false
-        // لا تعيد المحاولة في أخطاء الصلاحيات (Permission Denied) أو الملفات المفقودة
         if (message.contains("error=13") || message.contains("Permission denied", true)) return false
         if (message.contains("not found", true) || message.contains("not installed", true)) return false
         
@@ -394,7 +400,6 @@ class DownloadWorker @AssistedInject constructor(
 
     private suspend fun retryResult(errorMsg: String): Result {
         updateNotification(0, "Retrying: $errorMsg")
-        // نحن لا نحدث قاعدة البيانات بـ FAILED هنا لأنها ستعيد المحاولة
         return Result.retry()
     }
 
@@ -441,7 +446,7 @@ class DownloadWorker @AssistedInject constructor(
     private fun formatEta(seconds: Long): String {
         return when {
             seconds >= 3600 -> String.format("%dh %dm", seconds / 3600, (seconds % 3600) / 60)
-            seconds >= 60 -> String.format("%dm %ds", seconds / 60, seconds % 60)
+            seconds >= 60 -> String.format("%dm %ds", seconds / 60, (seconds % 60))
             else -> "${seconds}s"
         }
     }
@@ -451,6 +456,8 @@ class DownloadWorker @AssistedInject constructor(
         return when {
             message.contains("error=13") || message.contains("Permission denied") ->
                 "خطأ في الصلاحيات (Error=13). الملف التنفيذي غير مدعوم أو النظام يمنعه."
+            message.contains("403") || message.contains("Forbidden") ->
+                "يوتيوب يحجب النسخة الحالية من المحرك (403). جرّب تحديث المحرك من شاشة النماذج أو أعد المحاولة لاحقاً."
             message.contains("CRITICAL") -> 
                 message
             message.contains("Private video", ignoreCase = true) ->
@@ -479,14 +486,27 @@ class DownloadWorker @AssistedInject constructor(
         downloadRepository.updateProgress(downloadId, status, progress, downloadedSize, speed, eta)
     }
 
+    // عند الفشل: سجّل الخطأ وألغِ الإشعار العالق نهائياً
     private suspend fun failureResult(error: String): Result {
         downloadRepository.updateError(downloadId, DownloadStatus.FAILED, error)
-        updateNotification(0, "Failed: $error")
+        notificationManager.cancel(notificationId)
         return Result.failure(
             Data.Builder()
                 .putString(KEY_ERROR, error)
                 .build()
         )
+    }
+
+    // إشعار نهائي قابل للمسح (غير Ongoing) عند النجاح
+    private fun showFinalNotification(text: String) {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle("تحميل الفيديو و الترجمة")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .build()
+        notificationManager.notify(notificationId, notification)
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
