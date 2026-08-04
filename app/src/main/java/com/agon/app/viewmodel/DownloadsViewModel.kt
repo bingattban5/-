@@ -24,7 +24,10 @@ import javax.inject.Inject
 data class DownloadsUiState(
     val selectedFilter: DownloadFilter = DownloadFilter.ALL,
     val showDeleteConfirm: String? = null,
-    val showSrtPreview: DownloadItem? = null
+    val showSrtPreview: DownloadItem? = null,
+    // ➕ متغيرات جديدة لدعم التحديد المتعدد
+    val isSelectionMode: Boolean = false,
+    val selectedIds: Set<String> = emptySet()
 )
 
 enum class DownloadFilter(val label: String) {
@@ -66,6 +69,10 @@ class DownloadsViewModel @Inject constructor(
 
     fun setFilter(filter: DownloadFilter) {
         _uiState.value = _uiState.value.copy(selectedFilter = filter)
+        // عند تغيير الفلتر، نلغي التحديد لتجنب تحديد عناصر غير ظاهرة
+        if (_uiState.value.isSelectionMode) {
+            _uiState.value = _uiState.value.copy(selectedIds = emptySet())
+        }
     }
 
     private fun applyFilter(list: List<DownloadItem>, filter: DownloadFilter): List<DownloadItem> {
@@ -95,7 +102,60 @@ class DownloadsViewModel @Inject constructor(
         return applyFilter(downloads, _uiState.value.selectedFilter)
     }
 
+    // ==========================================
+    // ➕ دوال التحكم في التحديد المتعدد
+    // ==========================================
+
+    fun toggleSelectionMode() {
+        _uiState.value = _uiState.value.copy(
+            isSelectionMode = !_uiState.value.isSelectionMode,
+            selectedIds = emptySet()
+        )
+    }
+
+    fun toggleItemSelection(id: String) {
+        val current = _uiState.value.selectedIds
+        val newSet = if (current.contains(id)) current - id else current + id
+        _uiState.value = _uiState.value.copy(selectedIds = newSet)
+    }
+
+    fun selectAllVisible(visibleIds: List<String>) {
+        _uiState.value = _uiState.value.copy(selectedIds = visibleIds.toSet())
+    }
+
+    fun clearSelection() {
+        _uiState.value = _uiState.value.copy(
+            isSelectionMode = false,
+            selectedIds = emptySet()
+        )
+    }
+
+    fun deleteSelectedItems() {
+        viewModelScope.launch {
+            val idsToDelete = _uiState.value.selectedIds.toList()
+            idsToDelete.forEach { id ->
+                val download = downloadRepository.getDownloadById(id)
+                if (download != null && download.workManagerId.isNotEmpty()) {
+                    try {
+                        WorkManager.getInstance(getApplication())
+                            .cancelWorkById(UUID.fromString(download.workManagerId))
+                    } catch (_: Exception) {
+                        // تجاهل الأخطاء في حال كان العمل قد انتهى بالفعل
+                    }
+                }
+                deleteDownloadUseCase(id)
+            }
+            clearSelection() // الخروج من وضع التحديد بعد الحذف
+        }
+    }
+
+    // ==========================================
+    // دوال الإدارة الأصلية (محدثة قليلاً لمنع التعارض)
+    // ==========================================
+
     fun requestDelete(id: String) {
+        // منع فتح نافذة الحذف الفردية أثناء وضع التحديد المتعدد
+        if (_uiState.value.isSelectionMode) return
         _uiState.value = _uiState.value.copy(showDeleteConfirm = id)
     }
 
