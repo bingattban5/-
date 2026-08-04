@@ -87,14 +87,6 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
-    // عند إلغاء المهمة من WorkManager: ألغِ الإشعار وحدّث الحالة
-    override suspend fun onCanceled() {
-        notificationManager.cancel(notificationId)
-        if (downloadId.isNotEmpty()) {
-            downloadRepository.updateProgress(downloadId, DownloadStatus.CANCELLED, 0, "", "", "")
-        }
-    }
-
     private suspend fun downloadVideoOnly(
         url: String,
         formatId: String,
@@ -140,7 +132,6 @@ class DownloadWorker @AssistedInject constructor(
             }
 
             updateStatus(DownloadStatus.COMPLETED, 100, outputFile.length().toString(), "", "")
-            // إشعار نهائي قابل للمسح بدلاً من إشعار عالق
             showFinalNotification("اكتمل التحميل بنجاح")
 
             return Result.success(
