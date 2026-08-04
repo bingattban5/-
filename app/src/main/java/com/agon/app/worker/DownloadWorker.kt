@@ -23,12 +23,10 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 
-// Typealias to avoid conflict with androidx.work.ListenableWorker.Result
 private typealias KResult<T> = kotlin.Result<T>
 
 @HiltWorker
@@ -57,6 +55,7 @@ class DownloadWorker @AssistedInject constructor(
         val downloadModeStr = inputData.getString(KEY_DOWNLOAD_MODE) ?: return failureResult("Download mode is missing")
         val subtitleMethodStr = inputData.getString(KEY_SUBTITLE_METHOD) ?: "NONE"
         val subtitleLang = inputData.getString(KEY_SUBTITLE_LANG) ?: ""
+        val subtitleFormat = inputData.getString(KEY_SUBTITLE_FORMAT) ?: "srt"
 
         val downloadMode = try {
             DownloadMode.valueOf(downloadModeStr)
@@ -73,10 +72,10 @@ class DownloadWorker @AssistedInject constructor(
         return try {
             when (downloadMode) {
                 DownloadMode.VIDEO_AND_SUBTITLE -> downloadVideoAndSubtitle(
-                    url, formatId, outputPath, subtitleMethod, subtitleLang
+                    url, formatId, outputPath, subtitleMethod, subtitleLang, subtitleFormat
                 )
                 DownloadMode.VIDEO_ONLY -> downloadVideoOnly(url, formatId, outputPath)
-                DownloadMode.SUBTITLE_ONLY -> downloadSubtitleOnly(url, outputPath, subtitleMethod, subtitleLang)
+                DownloadMode.SUBTITLE_ONLY -> downloadSubtitleOnly(url, outputPath, subtitleMethod, subtitleLang, subtitleFormat)
             }
         } catch (e: Exception) {
             if (shouldRetry(e)) {
@@ -95,6 +94,7 @@ class DownloadWorker @AssistedInject constructor(
         updateStatus(DownloadStatus.DOWNLOADING, 0, "0 B", "", "")
 
         var errorMessage: String? = null
+        var lastProgress = 0
 
         try {
             ytDlpEngine.downloadVideo(url, formatId, outputPath)
@@ -105,6 +105,7 @@ class DownloadWorker @AssistedInject constructor(
                     if (progress.progress == -1) {
                         errorMessage = progress.message
                     } else {
+                        lastProgress = progress.progress
                         val stats = calculateStats(progress.progress)
                         updateStatus(
                             DownloadStatus.DOWNLOADING,
@@ -113,7 +114,7 @@ class DownloadWorker @AssistedInject constructor(
                             stats.speed,
                             stats.eta
                         )
-                        updateNotification(progress.progress, "Downloading video: ${progress.progress}%")
+                        updateNotification(progress.progress, "جاري التحميل: ${progress.progress}%")
                     }
                 }
 
@@ -131,8 +132,9 @@ class DownloadWorker @AssistedInject constructor(
                 return failureResult("Output file was not created. Path: $outputPath")
             }
 
-            updateStatus(DownloadStatus.COMPLETED, 100, outputFile.length().toString(), "", "")
-            showFinalNotification("اكتمل التحميل بنجاح")
+            val fileSize = outputFile.length()
+            updateStatus(DownloadStatus.COMPLETED, 100, fileSize.toString(), "", "")
+            showFinalNotification("اكتمل تحميل الفيديو بنجاح")
 
             return Result.success(
                 Data.Builder()
@@ -149,10 +151,11 @@ class DownloadWorker @AssistedInject constructor(
         formatId: String,
         outputPath: String,
         subtitleMethod: SubtitleMethod,
-        subtitleLang: String
+        subtitleLang: String,
+        subtitleFormat: String
     ): Result {
         updateStatus(DownloadStatus.DOWNLOADING, 0, "0 B", "", "")
-        updateNotification(0, "Downloading video...")
+        updateNotification(0, "جاري تحميل الفيديو...")
 
         var errorMessage: String? = null
 
@@ -173,7 +176,7 @@ class DownloadWorker @AssistedInject constructor(
                             stats.speed,
                             stats.eta
                         )
-                        updateNotification(progress.progress, "Downloading video: ${progress.progress}%")
+                        updateNotification(progress.progress, "جاري تحميل الفيديو: ${progress.progress}%")
                     }
                 }
 
@@ -192,9 +195,14 @@ class DownloadWorker @AssistedInject constructor(
             }
 
             updateStatus(DownloadStatus.EXTRACTING_SUBS, 100, "", "", "")
-            updateNotification(100, "Extracting subtitles...")
+            updateNotification(100, "جاري استخراج الترجمة...")
 
-            val subtitlePath = outputPath.replaceAfterLast('.', "srt")
+            val subtitlePath = if (outputPath.contains(".")) {
+                outputPath.replaceAfterLast('.', subtitleFormat)
+            } else {
+                "$outputPath.$subtitleFormat"
+            }
+
             val subtitleResult = when (subtitleMethod) {
                 SubtitleMethod.DIRECT_AR -> {
                     ytDlpEngine.downloadSubtitles(url, "ar", subtitlePath, autoGenerated = false)
@@ -206,7 +214,7 @@ class DownloadWorker @AssistedInject constructor(
                     if (downloadResult.isSuccess) {
                         val tempFile = downloadResult.getOrNull()!!
                         updateStatus(DownloadStatus.TRANSLATING, 100, "", "", "")
-                        updateNotification(100, "Translating to Arabic...")
+                        updateNotification(100, "جاري الترجمة إلى العربية...")
                         argosTranslateEngine.translateSrtFile(
                             tempFile.absolutePath,
                             subtitlePath,
@@ -220,14 +228,14 @@ class DownloadWorker @AssistedInject constructor(
                 SubtitleMethod.WHISPER_GENERATED -> {
                     val audioPath = outputPath.replaceAfterLast('.', "wav")
                     updateStatus(DownloadStatus.EXTRACTING_SUBS, 100, "", "", "")
-                    updateNotification(100, "Extracting audio for Whisper...")
+                    updateNotification(100, "جاري استخراج الصوت...")
                     
                     var extractError: String? = null
                     try {
                         ffmpegEngine.extractAudio(videoFile.absolutePath, audioPath, "wav")
                             .catch { e -> extractError = e.message }
                             .collect { progress ->
-                                updateNotification(progress.progress, "Extracting audio: ${progress.progress}%")
+                                updateNotification(progress.progress, "استخراج الصوت: ${progress.progress}%")
                             }
                         
                         if (extractError != null) {
@@ -237,7 +245,7 @@ class DownloadWorker @AssistedInject constructor(
                             val model = whisperEngine.selectBestModel(availableRam)
                             
                             updateStatus(DownloadStatus.TRANSLATING, 100, "", "", "")
-                            updateNotification(100, "Transcribing with Whisper...")
+                            updateNotification(100, "جاري إنشاء الترجمة بالذكاء الاصطناعي...")
                             
                             whisperEngine.transcribeToSRT(audioPath, subtitlePath, model, "auto", false)
                         }
@@ -280,12 +288,17 @@ class DownloadWorker @AssistedInject constructor(
         url: String,
         outputPath: String,
         subtitleMethod: SubtitleMethod,
-        subtitleLang: String
+        subtitleLang: String,
+        subtitleFormat: String
     ): Result {
         updateStatus(DownloadStatus.EXTRACTING_SUBS, 0, "", "", "")
-        updateNotification(0, "Downloading subtitle...")
+        updateNotification(0, "جاري تحميل الترجمة...")
 
-        val subtitlePath = outputPath.replaceAfterLast('.', "srt")
+        val subtitlePath = if (outputPath.contains(".")) {
+            outputPath.replaceAfterLast('.', subtitleFormat)
+        } else {
+            "$outputPath.$subtitleFormat"
+        }
         
         val subtitleResult = when (subtitleMethod) {
             SubtitleMethod.DIRECT_AR -> {
@@ -298,7 +311,7 @@ class DownloadWorker @AssistedInject constructor(
                 if (downloadResult.isSuccess) {
                     val tempFile = downloadResult.getOrNull()!!
                     updateStatus(DownloadStatus.TRANSLATING, 50, "", "", "")
-                    updateNotification(50, "Translating to Arabic...")
+                    updateNotification(50, "جاري الترجمة إلى العربية...")
                     argosTranslateEngine.translateSrtFile(
                         tempFile.absolutePath,
                         subtitlePath,
@@ -312,14 +325,14 @@ class DownloadWorker @AssistedInject constructor(
             SubtitleMethod.WHISPER_GENERATED -> {
                 val tempVideoPath = outputPath.replaceAfterLast('.', "temp.mp4")
                 updateStatus(DownloadStatus.DOWNLOADING, 0, "", "", "")
-                updateNotification(0, "Downloading video for audio extraction...")
+                updateNotification(0, "جاري تحميل الفيديو لاستخراج الصوت...")
                 
                 var downloadError: String? = null
                 try {
                     ytDlpEngine.downloadVideo(url, "bestaudio", tempVideoPath)
                         .catch { e -> downloadError = e.message }
                         .collect { progress ->
-                            updateNotification(progress.progress, "Downloading: ${progress.progress}%")
+                            updateNotification(progress.progress, "جاري التحميل: ${progress.progress}%")
                         }
                     
                     if (downloadError != null) {
@@ -327,13 +340,13 @@ class DownloadWorker @AssistedInject constructor(
                     } else {
                         val audioPath = outputPath.replaceAfterLast('.', "wav")
                         updateStatus(DownloadStatus.EXTRACTING_SUBS, 100, "", "", "")
-                        updateNotification(100, "Extracting audio...")
+                        updateNotification(100, "جاري استخراج الصوت...")
                         
                         var extractError: String? = null
                         ffmpegEngine.extractAudio(tempVideoPath, audioPath, "wav")
                             .catch { e -> extractError = e.message }
                             .collect { progress ->
-                                updateNotification(progress.progress, "Extracting audio: ${progress.progress}%")
+                                updateNotification(progress.progress, "استخراج الصوت: ${progress.progress}%")
                             }
                         
                         if (extractError != null) {
@@ -343,7 +356,7 @@ class DownloadWorker @AssistedInject constructor(
                             val model = whisperEngine.selectBestModel(availableRam)
                             
                             updateStatus(DownloadStatus.TRANSLATING, 100, "", "", "")
-                            updateNotification(100, "Transcribing with Whisper...")
+                            updateNotification(100, "جاري إنشاء الترجمة بالذكاء الاصطناعي...")
                             
                             val result = whisperEngine.transcribeToSRT(audioPath, subtitlePath, model, "auto", false)
                             
@@ -390,7 +403,7 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     private suspend fun retryResult(errorMsg: String): Result {
-        updateNotification(0, "Retrying: $errorMsg")
+        updateNotification(0, "إعادة المحاولة: $errorMsg")
         return Result.retry()
     }
 
@@ -477,7 +490,6 @@ class DownloadWorker @AssistedInject constructor(
         downloadRepository.updateProgress(downloadId, status, progress, downloadedSize, speed, eta)
     }
 
-    // عند الفشل: سجّل الخطأ وألغِ الإشعار العالق نهائياً
     private suspend fun failureResult(error: String): Result {
         downloadRepository.updateError(downloadId, DownloadStatus.FAILED, error)
         notificationManager.cancel(notificationId)
@@ -488,10 +500,9 @@ class DownloadWorker @AssistedInject constructor(
         )
     }
 
-    // إشعار نهائي قابل للمسح (غير Ongoing) عند النجاح
     private fun showFinalNotification(text: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("تحميل الفيديو و الترجمة")
+            .setContentTitle("VSub - تحميل الفيديو و الترجمة")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setOngoing(false)
@@ -501,7 +512,7 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
-        return ForegroundInfo(notificationId, createNotification(0, "Starting download..."))
+        return ForegroundInfo(notificationId, createNotification(0, "جاري البدء..."))
     }
 
     private fun createNotificationChannel() {
@@ -524,7 +535,7 @@ class DownloadWorker @AssistedInject constructor(
 
     private fun createNotification(progress: Int, text: String): Notification {
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("تحميل الفيديو و الترجمة")
+            .setContentTitle("VSub - تحميل الفيديو و الترجمة")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, progress == 0)
@@ -541,6 +552,7 @@ class DownloadWorker @AssistedInject constructor(
         const val KEY_DOWNLOAD_MODE = "download_mode"
         const val KEY_SUBTITLE_METHOD = "subtitle_method"
         const val KEY_SUBTITLE_LANG = "subtitle_lang"
+        const val KEY_SUBTITLE_FORMAT = "subtitle_format"
         const val KEY_SUBTITLE_PATH = "subtitle_path"
         const val KEY_SUBTITLE_ERROR = "subtitle_error"
         const val KEY_PROGRESS = "progress"
