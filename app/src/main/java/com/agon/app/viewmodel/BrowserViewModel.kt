@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.agon.app.data.AppPreferences
 import com.agon.app.data.DownloadItem
 import com.agon.app.data.DownloadMode
 import com.agon.app.data.DownloadRepository
@@ -39,7 +40,8 @@ class BrowserViewModel @Inject constructor(
     private val analyzeUrlUseCase: AnalyzeUrlUseCase,
     private val determineSubtitleMethodUseCase: DetermineSubtitleMethodUseCase,
     private val addDownloadUseCase: AddDownloadUseCase,
-    private val downloadRepository: DownloadRepository
+    private val downloadRepository: DownloadRepository,
+    private val preferences: AppPreferences
 ) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(BrowserState())
@@ -49,7 +51,6 @@ class BrowserViewModel @Inject constructor(
     val pendingNavigation: StateFlow<String?> = _pendingNavigation.asStateFlow()
 
     init {
-        // ربط حالة التبويبات بالحالة الشاملة
         viewModelScope.launch {
             combine(tabManager.tabs, tabManager.activeTabIndex) { tabs, activeIndex ->
                 Pair(tabs, activeIndex)
@@ -102,6 +103,12 @@ class BrowserViewModel @Inject constructor(
                 it.copy(isLoading = true, url = url, progress = 0)
             }
         }
+        // إعادة تعيين حالة الفيديو عند تحميل صفحة جديدة
+        _state.value = _state.value.copy(
+            videoInfo = null,
+            detectedVideoUrl = null,
+            showVideoSheet = false
+        )
     }
 
     fun onPageProgressChanged(progress: Int) {
@@ -124,9 +131,6 @@ class BrowserViewModel @Inject constructor(
                 )
             }
         }
-
-        // محاولة اكتشاف فيديو في الصفحة
-        detectVideoInPage(url)
     }
 
     fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
@@ -138,17 +142,14 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ========================================
-    // اكتشاف الفيديو
+    // تحليل الصفحة الحالية (عند الضغط على زر التحميل)
     // ========================================
 
-    private fun detectVideoInPage(url: String) {
-        // لا نحلل إذا كان هناك فيديو مكتشف بالفعل لنفس الرابط
-        if (_state.value.detectedVideoUrl == url) return
-
+    fun analyzeCurrentPage(url: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 isAnalyzing = true,
-                analysisStep = "جاري فحص الصفحة للفيديو..."
+                analysisStep = "جاري تحليل الصفحة..."
             )
 
             val result = analyzeUrlUseCase(url)
@@ -166,12 +167,10 @@ class BrowserViewModel @Inject constructor(
                 )
             }
 
-            result.onFailure {
-                // لا يوجد فيديو، نعيد الحالة فقط
+            result.onFailure { error ->
                 _state.value = _state.value.copy(
                     isAnalyzing = false,
-                    analysisStep = "",
-                    detectedVideoUrl = null
+                    errorMessage = "لم يتم العثور على فيديو في هذه الصفحة: ${error.message}"
                 )
             }
         }
@@ -200,7 +199,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ========================================
-    // التنزيل
+    // التنزيل الفعلي مع التقدم الحقيقي
     // ========================================
 
     fun startSpecificDownload(mode: DownloadMode, method: SubtitleMethod) {
@@ -211,10 +210,13 @@ class BrowserViewModel @Inject constructor(
                 val quality = currentState.selectedQuality ?: throw IllegalStateException("لم يتم اختيار الجودة")
                 val url = currentState.detectedVideoUrl ?: throw IllegalStateException("الرابط غير متوفر")
 
+                // قراءة صيغة الترجمة الافتراضية من الإعدادات
+                val subtitleFormat = preferences.subtitleFormatFlow.value.ifEmpty { "srt" }
+
                 val downloadId = UUID.randomUUID().toString()
                 val downloadDir = File(
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                    "SubVIDD"
+                    "VSub"
                 )
                 if (!downloadDir.exists()) {
                     downloadDir.mkdirs()
@@ -236,7 +238,7 @@ class BrowserViewModel @Inject constructor(
                 }
 
                 val srtPath = if (mode != DownloadMode.VIDEO_ONLY) {
-                    if (outputPath.contains(".")) outputPath.replaceAfterLast('.', "srt") else "$outputPath.srt"
+                    if (outputPath.contains(".")) outputPath.replaceAfterLast('.', subtitleFormat) else "$outputPath.$subtitleFormat"
                 } else ""
 
                 val downloadItem = DownloadItem(
@@ -265,6 +267,7 @@ class BrowserViewModel @Inject constructor(
                     .putString(DownloadWorker.KEY_DOWNLOAD_MODE, mode.name)
                     .putString(DownloadWorker.KEY_SUBTITLE_METHOD, method.name)
                     .putString(DownloadWorker.KEY_SUBTITLE_LANG, subtitleLang)
+                    .putString(DownloadWorker.KEY_SUBTITLE_FORMAT, subtitleFormat)
                     .build()
 
                 val downloadWorkRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
