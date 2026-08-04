@@ -2,6 +2,7 @@ package com.agon.app.ui.screens.browser
 
 import android.annotation.SuppressLint
 import android.content.ClipData
+import androidx.compose.animation.core.tween
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
