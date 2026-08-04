@@ -125,7 +125,7 @@ fun DownloadsScreen(
                         }
                     }) {
                         Icon(
-                            if (uiState.isSelectionMode) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = if (uiState.isSelectionMode) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = if (uiState.isSelectionMode) "إلغاء التحديد" else "الرجوع للمتصفح",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
@@ -134,27 +134,32 @@ fun DownloadsScreen(
                 actions = {
                     if (uiState.isSelectionMode) {
                         val allSelected = uiState.selectedIds.size == filteredDownloads.size && filteredDownloads.isNotEmpty()
+                        
+                        // زر تحديد الكل
                         IconButton(onClick = {
                             if (allSelected) viewModel.clearSelection()
                             else viewModel.selectAllVisible(filteredDownloads.map { it.id })
                         }) {
                             Icon(
-                                if (allSelected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                                imageVector = if (allSelected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
                                 contentDescription = "تحديد الكل",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
+                        
+                        // زر حذف المحدد
                         IconButton(onClick = { viewModel.deleteSelectedItems() }) {
                             Icon(
-                                Icons.Filled.Delete,
+                                imageVector = Icons.Filled.Delete,
                                 contentDescription = "حذف المحدد",
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
                     } else {
+                        // زر تفعيل وضع التحديد
                         IconButton(onClick = { viewModel.toggleSelectionMode() }) {
                             Icon(
-                                Icons.Filled.CheckBoxOutlineBlank,
+                                imageVector = Icons.Filled.CheckBoxOutlineBlank,
                                 contentDescription = "تفعيل وضع التحديد",
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
@@ -175,7 +180,7 @@ fun DownloadsScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Stats: Mini Radial Progress Bars (تظهر فقط في الوضع العادي)
+            // الإحصائيات وفلاتر البحث (تظهر فقط في الوضع العادي)
             if (!uiState.isSelectionMode) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -208,9 +213,9 @@ fun DownloadsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Filter Elements
                 SegmentedControl(
                     items = DownloadFilter.entries.toList(),
                     selectedItem = uiState.selectedFilter,
@@ -221,7 +226,7 @@ fun DownloadsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Downloads List or Empty State
+            // قائمة التنزيلات أو الحالة الفارغة
             if (filteredDownloads.isEmpty()) {
                 BreathingEmptyState(
                     icon = Icons.Filled.HourglassEmpty,
@@ -251,7 +256,7 @@ fun DownloadsScreen(
         }
     }
 
-    // Delete Confirmation Dialog
+    // نافذة تأكيد الحذف الفردي (تظهر فقط خارج وضع التحديد)
     if (uiState.showDeleteConfirm != null && !uiState.isSelectionMode) {
         AlertDialog(
             onDismissRequest = viewModel::dismissDelete,
@@ -260,16 +265,22 @@ fun DownloadsScreen(
             confirmButton = {
                 TextButton(
                     onClick = viewModel::confirmDelete,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("حذف") }
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("حذف")
+                }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::dismissDelete) { Text("إلغاء") }
+                TextButton(onClick = viewModel::dismissDelete) {
+                    Text("إلغاء")
+                }
             }
         )
     }
 
-    // SRT Preview Sheet
+    // نافذة معاينة الترجمة
     if (uiState.showSrtPreview != null) {
         ModalBottomSheet(
             onDismissRequest = viewModel::dismissSrtPreview,
@@ -319,66 +330,333 @@ private fun DownloadItemCard(
             .clickable { if (isSelectionMode) onToggleSelect() },
         containerColor = cardBgColor
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ➕ Checkbox يظهر فقط في وضع التحديد
-            if (isSelectionMode) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { onToggleSelect() },
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
+            // Title Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    Icons.Filled.Download,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${item.selectedQuality} • ${item.downloadMode.toArabicLabel()}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // إخفاء زر الحذف الفردي أثناء وضع التحديد المتعدد لتجنب الالتباس
-            if (!isSelectionMode) {
-                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = "حذف",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp)
+                // ➕ Checkbox يظهر فقط في وضع التحديد
+                if (isSelectionMode) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { onToggleSelect() },
+                        modifier = Modifier.size(24.dp)
                     )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Download,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${item.selectedQuality} • ${item.downloadMode.toArabicLabel()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // إخفاء زر الحذف الفردي أثناء وضع التحديد المتعدد لتجنب الالتباس
+                if (!isSelectionMode) {
+                    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = "حذف",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // Error Message Block
+            AnimatedVisibility(
+                visible = (item.status == DownloadStatus.FAILED || item.status == DownloadStatus.CANCELLED) && item.errorMessage.isNotEmpty()
+            ) {
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Error,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = item.errorMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            // Progress (Neon-like)
+            if (item.status in listOf(
+                DownloadStatus.DOWNLOADING, DownloadStatus.PAUSED, DownloadStatus.QUEUED,
+                DownloadStatus.ANALYZING, DownloadStatus.EXTRACTING_SUBS, DownloadStatus.TRANSLATING
+            )) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        NeonLinearProgressIndicator(
+                            progress = item.progress / 100f,
+                            modifier = Modifier.weight(1f),
+                            color = statusColor
+                        )
+                        Text(
+                            text = "${item.progress}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor,
+                            modifier = Modifier.width(40.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = item.downloadedSize.ifEmpty { "0 MB" },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (item.downloadSpeed.isNotEmpty()) {
+                            Text(
+                                text = item.downloadSpeed,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (item.eta.isNotEmpty()) {
+                            Text(
+                                text = "متبقي: ${item.eta}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = item.totalSize,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (item.status == DownloadStatus.DOWNLOADING) {
+                        OutlinedButton(
+                            onClick = onCancel,
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إلغاء التحميل", fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            }
+
+            // Status Badge + Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                GlassCard(
+                    modifier = Modifier,
+                    elevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = item.status.toIcon(),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = statusColor
+                        )
+                        Text(
+                            text = item.status.toArabicLabel(),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    }
+                }
+
+                if (item.status == DownloadStatus.COMPLETED && item.srtFilePath.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = onShowSrt, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Filled.Description,
+                                contentDescription = "معاينة SRT",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        IconButton(onClick = { /* Share */ }, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = "مشاركة",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (item.status == DownloadStatus.FAILED || item.status == DownloadStatus.CANCELLED) {
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = onRetry,
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("إعادة المحاولة", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
         }
-
-        // ... (هنا يبقى باقي كود البطاقة كما هو: Error Message Block, Progress, Status Badge + Actions)
-        // تأكد من نسخ باقي محتوى DownloadItemCard من ملفك الأصلي للحفاظ على شريط التقدم وأزرار إعادة المحاطة
     }
 }
 
-// ... (تأكد من بقاء دوال SrtPreviewSheet, toArabicLabel, toIcon كما هي في ملفك الأصلي)
+@Composable
+private fun SrtPreviewSheet(
+    item: DownloadItem,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Filled.Subtitles,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+            Column {
+                Text(
+                    text = "ملف الترجمة",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = 0.dp
+        ) {
+            Text(
+                text = "1\n00:00:01,000 --> 00:00:05,000\nمرحباً بكم في هذا الفيديو\n\n2\n00:00:06,000 --> 00:00:10,000\nسنتحدث اليوم عن موضوع مهم\n\n3\n00:00:11,000 --> 00:00:15,000\nدعونا نبدأ بالجزء الأول\n\n4\n00:00:16,000 --> 00:00:20,000\nهذه نقطة مهمة جداً\n\n5\n00:00:21,000 --> 00:00:25,000\nشكراً لمتابعتكم",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("إغلاق")
+            }
+            androidx.compose.material3.Button(
+                onClick = { /* Share */ },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("مشاركة SRT")
+            }
+        }
+    }
+}
+
+private fun DownloadStatus.toArabicLabel(): String = when (this) {
+    DownloadStatus.QUEUED -> "في الانتظار"
+    DownloadStatus.ANALYZING -> "جاري التحليل"
+    DownloadStatus.DOWNLOADING -> "جاري التحميل"
+    DownloadStatus.PAUSED -> "متوقف مؤقتاً"
+    DownloadStatus.EXTRACTING_SUBS -> "استخراج الترجمة"
+    DownloadStatus.TRANSLATING -> "جاري الترجمة"
+    DownloadStatus.COMPLETED -> "مكتمل"
+    DownloadStatus.FAILED -> "فشل"
+    DownloadStatus.CANCELLED -> "ملغي"
+}
+
+private fun DownloadStatus.toIcon() = when (this) {
+    DownloadStatus.QUEUED -> Icons.Filled.HourglassEmpty
+    DownloadStatus.ANALYZING -> Icons.Filled.Download
+    DownloadStatus.DOWNLOADING -> Icons.Filled.Download
+    DownloadStatus.PAUSED -> Icons.Filled.Pause
+    DownloadStatus.EXTRACTING_SUBS -> Icons.Filled.Subtitles
+    DownloadStatus.TRANSLATING -> Icons.Filled.Translate
+    DownloadStatus.COMPLETED -> Icons.Filled.CheckCircle
+    DownloadStatus.FAILED -> Icons.Filled.Error
+    DownloadStatus.CANCELLED -> Icons.Filled.Error
+}
+
+private fun SubtitleMethod.toArabicLabel(): String = when (this) {
+    SubtitleMethod.DIRECT_AR -> "ترجمة مباشرة"
+    SubtitleMethod.TRANSLATED_FROM_OTHER -> "ترجمة Argos"
+    SubtitleMethod.WHISPER_GENERATED -> "توليد Whisper"
+    SubtitleMethod.NONE -> "بدون ترجمة"
+}
+
+private fun DownloadMode.toArabicLabel(): String = when (this) {
+    DownloadMode.VIDEO_AND_SUBTITLE -> "فيديو + ترجمة"
+    DownloadMode.VIDEO_ONLY -> "فيديو فقط"
+    DownloadMode.SUBTITLE_ONLY -> "ترجمة فقط"
+}
