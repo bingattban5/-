@@ -10,14 +10,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.agon.app.engine.YtDlpEngine
 import com.agon.app.ui.components.AppPermissionHandler
 import com.agon.app.ui.screens.DownloadsScreen
 import com.agon.app.ui.screens.FileManagerScreen
@@ -31,9 +32,14 @@ import com.agon.app.viewmodel.FileManagerViewModel
 import com.agon.app.viewmodel.ModelsViewModel
 import com.agon.app.viewmodel.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    
+    @Inject
+    lateinit var ytDlpEngine: YtDlpEngine
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -41,6 +47,11 @@ class MainActivity : ComponentActivity() {
             // قراءة تفضيل الوضع الليلي
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val isDarkTheme by settingsViewModel.isDarkTheme.collectAsState()
+
+            // التحديث التلقائي لـ yt-dlp عند بدء التطبيق
+            LaunchedEffect(Unit) {
+                ytDlpEngine.updateYtDlpIfNeeded()
+            }
 
             AgonAppTheme(
                 darkTheme = isDarkTheme,
@@ -66,7 +77,6 @@ fun MainApp() {
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            // تم إزالة bottomBar بالكامل
         ) { innerPadding ->
             NavHost(
                 navController = navController,
@@ -79,7 +89,6 @@ fun MainApp() {
                 }
                 composable("downloads") {
                     val viewModel: DownloadsViewModel = hiltViewModel()
-                    // تم إضافة navController لتمكين زر الرجوع لاحقاً
                     DownloadsScreen(viewModel = viewModel, navController = navController)
                 }
                 composable("models") {
