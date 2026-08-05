@@ -11,20 +11,23 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
@@ -51,11 +54,10 @@ fun BrowserScreen(
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     
-    // متغيرات لحفظ موقع زر التحميل العائم (لتفعيل خاصية السحب)
+    // متغيرات لحفظ موقع زر التحميل العائم وتفادي خروجه من الشاشة
     var fabOffsetX by remember { mutableFloatStateOf(0f) }
     var fabOffsetY by remember { mutableFloatStateOf(0f) }
 
-    // معالجة رسائل الخطأ والنجاح
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -70,7 +72,6 @@ fun BrowserScreen(
         }
     }
 
-    // الاستماع لطلبات التنقل من شريط العنوان
     LaunchedEffect(pendingNavigation) {
         pendingNavigation?.let { url ->
             webView?.loadUrl(url)
@@ -78,7 +79,6 @@ fun BrowserScreen(
         }
     }
 
-    // ربط زر الرجوع في النظام بالرجوع داخل WebView
     BackHandler(enabled = state.canGoBack) {
         webView?.goBack()
     }
@@ -105,7 +105,7 @@ fun BrowserScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // WebView الفعلي
+                // WebView
                 BrowserWebView(
                     currentUrl = state.activeTab?.url ?: "https://www.google.com",
                     onWebViewCreated = { webView = it },
@@ -125,12 +125,30 @@ fun BrowserScreen(
                 )
 
                 // ==========================================
-                // زر التحميل العائم (FAB) - قابل للتحريك
+                // زر التحميل العائم (تصميم عصري ومستقر)
                 // ==========================================
                 AnimatedVisibility(
                     visible = true,
                     enter = scaleIn(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
-                    exit = scaleOut(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+                    exit = scaleOut(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300)),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 32.dp, end = 24.dp) // مسافات آمنة من الحواف
+                        .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    fabOffsetX += dragAmount.x
+                                    fabOffsetY += dragAmount.y
+                                },
+                                onDragEnd = {
+                                    // إعادة الزر لمكانه إذا تم سحبه بعيداً جداً (حماية إضافية)
+                                    if (fabOffsetX > 100f || fabOffsetX < -800f) fabOffsetX = 0f
+                                    if (fabOffsetY > 100f || fabOffsetY < -1500f) fabOffsetY = 0f
+                                }
+                            )
+                        }
                 ) {
                     FloatingActionButton(
                         onClick = {
@@ -140,46 +158,49 @@ fun BrowserScreen(
                             }
                         },
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(20.dp)
-                            .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    fabOffsetX += dragAmount.x
-                                    fabOffsetY += dragAmount.y
-                                }
-                            }
                             .size(64.dp)
                             .shadow(
-                                elevation = 12.dp,
-                                shape = CircleShape,
-                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                elevation = 16.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                spotColor = MaterialTheme.colorScheme.primary
                             ),
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = CircleShape
+                        containerColor = Color.Transparent, // لجعل الخلفية تعتمد على الـ Box الداخلي
+                        elevation = FloatingActionButtonDefaults.elevation(0.dp),
+                        shape = RoundedCornerShape(20.dp)
                     ) {
-                        if (state.isAnalyzing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 3.dp
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.Download,
-                                contentDescription = "تحليل وتحميل",
-                                modifier = Modifier.size(30.dp)
-                            )
+                        // خلفية متدرجة عصرية
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.tertiary
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (state.isAnalyzing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    color = Color.White,
+                                    strokeWidth = 3.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Filled.Download,
+                                    contentDescription = "تحميل",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
                         }
                     }
                 }
 
-                // ==========================================
-                // القائمة العصرية (الدوائر المتسلسلة)
-                // ==========================================
                 if (state.showMainMenu) {
                     StackedCirclesMenu(
                         expanded = true,
@@ -193,10 +214,7 @@ fun BrowserScreen(
             }
         }
 
-        // ==========================================
-        // النوافذ المنبثقة (Bottom Sheets & Dialogs)
-        // ==========================================
-
+        // النوافذ المنبثقة
         if (state.showTabsList) {
             TabsListSheet(
                 tabs = state.tabs,
@@ -274,22 +292,16 @@ private fun BrowserWebView(
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    
-                    // إعدادات الشاشة لضبط حجم صفحات الويب بشكل متناسق مع الجوال
                     loadWithOverviewMode = true
                     useWideViewPort = true
                     layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.NORMAL
-                    
                     setSupportZoom(true)
                     builtInZoomControls = true
                     displayZoomControls = false
                     mediaPlaybackRequiresUserGesture = false
                     allowContentAccess = true
                     allowFileAccess = true
-                    
-                    // تحسين User-Agent لتجنب عرض نسخ سطح المكتب المكسورة
                     userAgentString = userAgentString.replace("; wv", "")
-                    
                     defaultTextEncodingName = "UTF-8"
                     setSupportMultipleWindows(false)
                 }
