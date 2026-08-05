@@ -2,7 +2,6 @@ package com.agon.app.ui.screens.browser
 
 import android.annotation.SuppressLint
 import android.content.ClipData
-import androidx.compose.animation.core.tween
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -12,8 +11,11 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -23,7 +25,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavHostController
@@ -32,6 +36,7 @@ import com.agon.app.data.SubtitleMethod
 import com.agon.app.ui.components.StackedCirclesMenu
 import com.agon.app.ui.screens.browser.components.*
 import com.agon.app.viewmodel.BrowserViewModel
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -45,6 +50,10 @@ fun BrowserScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var webView by remember { mutableStateOf<WebView?>(null) }
+    
+    // متغيرات لحفظ موقع زر التحميل العائم (لتفعيل خاصية السحب)
+    var fabOffsetX by remember { mutableFloatStateOf(0f) }
+    var fabOffsetY by remember { mutableFloatStateOf(0f) }
 
     // معالجة رسائل الخطأ والنجاح
     LaunchedEffect(state.errorMessage) {
@@ -116,7 +125,7 @@ fun BrowserScreen(
                 )
 
                 // ==========================================
-                // زر التحميل العائم (FAB) - أنيق، عصري، ودائم الظهور
+                // زر التحميل العائم (FAB) - قابل للتحريك
                 // ==========================================
                 AnimatedVisibility(
                     visible = true,
@@ -127,13 +136,20 @@ fun BrowserScreen(
                         onClick = {
                             val currentUrl = state.activeTab?.url
                             if (!currentUrl.isNullOrBlank()) {
-                                // تحليل الرابط فور الضغط لاستخراج الفيديو والترجمة
                                 viewModel.analyzeCurrentPage(currentUrl)
                             }
                         },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(20.dp)
+                            .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    fabOffsetX += dragAmount.x
+                                    fabOffsetY += dragAmount.y
+                                }
+                            }
                             .size(64.dp)
                             .shadow(
                                 elevation = 12.dp,
@@ -181,7 +197,6 @@ fun BrowserScreen(
         // النوافذ المنبثقة (Bottom Sheets & Dialogs)
         // ==========================================
 
-        // قائمة التبويبات
         if (state.showTabsList) {
             TabsListSheet(
                 tabs = state.tabs,
@@ -194,7 +209,6 @@ fun BrowserScreen(
             )
         }
 
-        // صفحة بيانات الفيديو (تظهر بعد التحليل الناجح)
         if (state.showVideoSheet && state.videoInfo != null) {
             VideoDetectedSheet(
                 state = state,
@@ -210,7 +224,6 @@ fun BrowserScreen(
             )
         }
 
-        // قائمة الضغط المطول على الروابط
         if (state.showLinkMenu && state.longPressedLink != null) {
             LongPressLinkMenu(
                 link = state.longPressedLink!!,
@@ -261,15 +274,22 @@ private fun BrowserWebView(
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
+                    
+                    // إعدادات الشاشة لضبط حجم صفحات الويب بشكل متناسق مع الجوال
                     loadWithOverviewMode = true
                     useWideViewPort = true
+                    layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.NORMAL
+                    
                     setSupportZoom(true)
                     builtInZoomControls = true
                     displayZoomControls = false
                     mediaPlaybackRequiresUserGesture = false
                     allowContentAccess = true
                     allowFileAccess = true
-                    layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                    
+                    // تحسين User-Agent لتجنب عرض نسخ سطح المكتب المكسورة
+                    userAgentString = userAgentString.replace("; wv", "")
+                    
                     defaultTextEncodingName = "UTF-8"
                     setSupportMultipleWindows(false)
                 }
@@ -290,7 +310,6 @@ private fun BrowserWebView(
                             val title = view?.title ?: ""
                             val faviconUrl = "https://www.google.com/s2/favicons?domain=${try { java.net.URL(url).host } catch (e: Exception) { "" }}&sz=64"
                             
-                            // إخفاء عناصر YouTube السفلية عبر JavaScript
                             val hideYouTubeUI = """
                                 javascript:(function() {
                                     var elements = document.querySelectorAll('#app-bar-guide-menu, .ytd-app, ytd-mini-guide-renderer, #guide-button, ytd-mini-guide-entry-renderer');
