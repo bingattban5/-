@@ -19,14 +19,58 @@ import kotlinx.serialization.json.jsonPrimitive
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// ... (باقي data classes تبقى كما هي: YtDlpVideoInfo, YtDlpFormat, YtDlpSubtitle, DownloadProgress)
+// ==========================================
+// ✅ Data Classes (التي كانت مفقودة)
+// ==========================================
+
+@Serializable
+data class YtDlpVideoInfo(
+    val id: String = "",
+    val title: String = "",
+    val thumbnail: String? = null,
+    val duration: Int? = null,
+    val uploader: String = "",
+    val webpage_url: String = "",
+    val formats: List<YtDlpFormat> = emptyList(),
+    val subtitles: Map<String, List<YtDlpSubtitle>> = emptyMap(),
+    val automatic_captions: Map<String, List<YtDlpSubtitle>> = emptyMap()
+)
+
+@Serializable
+data class YtDlpFormat(
+    val format_id: String = "",
+    val ext: String = "",
+    val height: Int? = null,
+    val width: Int? = null,
+    val filesize: Long? = null,
+    val filesize_approx: Long? = null,
+    val format_note: String? = null,
+    val vcodec: String? = null,
+    val acodec: String? = null,
+    val resolution: String? = null
+)
+
+@Serializable
+data class YtDlpSubtitle(
+    val ext: String = "",
+    val url: String = "",
+    val name: String? = null
+)
+
+data class DownloadProgress(
+    val progress: Int,
+    val message: String
+)
+
+// ==========================================
+// ✅ المحرك الرئيسي
+// ==========================================
 
 @Singleton
 class YtDlpEngine @Inject constructor(
@@ -48,17 +92,12 @@ class YtDlpEngine @Inject constructor(
     companion object {
         private const val KEY_LAST_UPDATE_TIME = "last_yt_dlp_update_time"
         private const val KEY_CURRENT_VERSION = "current_yt_dlp_version"
-        private const val UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 ساعة
-        
-        // ✅ الرابط الصريح لأحدث إصدار من yt-dlp من GitHub
+        private const val UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000L
         private const val GITHUB_API_LATEST = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
     }
 
     fun isYtDlpInstalled(): Boolean = true
 
-    /**
-     * الحصول على الإصدار الحالي المثبت
-     */
     suspend fun getVersion(): Result<String> = withContext(Dispatchers.IO) {
         try {
             val version = YoutubeDL.getInstance().version(context)
@@ -68,9 +107,6 @@ class YtDlpEngine @Inject constructor(
         }
     }
 
-    /**
-     * ✅ الإصلاح النهائي: جلب معلومات آخر إصدار من GitHub API مباشرة
-     */
     private suspend fun fetchLatestReleaseInfo(): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         try {
             val connection = (URL(GITHUB_API_LATEST).openConnection() as HttpURLConnection).apply {
@@ -91,14 +127,13 @@ class YtDlpEngine @Inject constructor(
             val tagName = jsonResponse["tag_name"]?.jsonPrimitive?.contentOrNull
                 ?: return@withContext Result.failure(Exception("لم يتم العثور على tag_name"))
 
-            // البحث عن asset باسم "yt-dlp" (الملف التنفيذي الرئيسي)
             val assets = jsonResponse["assets"]?.jsonArray
                 ?: return@withContext Result.failure(Exception("لم يتم العثور على assets"))
 
             val ytDlpAsset = assets.firstOrNull { asset ->
                 val name = asset.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: ""
                 name == "yt-dlp"
-            } ?: return@withContext Result.failure(Exception("لم يتم العثور على yt-dlp في الإصدار"))
+            } ?: return@withContext Result.failure(Exception("لم يتم العثور على yt-dlp"))
 
             val downloadUrl = ytDlpAsset.jsonObject["browser_download_url"]?.jsonPrimitive?.contentOrNull
                 ?: return@withContext Result.failure(Exception("لم يتم العثور على رابط التحميل"))
@@ -109,35 +144,25 @@ class YtDlpEngine @Inject constructor(
         }
     }
 
-    /**
-     * ✅ التحديث التلقائي الذكي (مرة كل 24 ساعة) - الإصلاح النهائي
-     */
     suspend fun updateYtDlpIfNeeded(): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             val lastUpdateTime = prefs.getLong(KEY_LAST_UPDATE_TIME, 0L)
             val currentTime = System.currentTimeMillis()
 
-            // إذا لم تمر 24 ساعة، لا نقوم بالتحديث
             if (currentTime - lastUpdateTime < UPDATE_INTERVAL_MS) {
                 return@withContext Result.success(false)
             }
 
-            // 1. جلب معلومات آخر إصدار
-            val (latestVersion, downloadUrl) = fetchLatestReleaseInfo().getOrThrow()
-
-            // 2. مقارنة مع الإصدار الحالي
+            val (latestVersion, _) = fetchLatestReleaseInfo().getOrThrow()
             val currentVersion = prefs.getString(KEY_CURRENT_VERSION, null)
+            
             if (currentVersion == latestVersion) {
-                // نفس الإصدار، نحدّث الوقت فقط
                 prefs.edit().putLong(KEY_LAST_UPDATE_TIME, currentTime).apply()
                 return@withContext Result.success(false)
             }
 
-            // 3. استخدام مكتبة youtubedl-android للتحديث (طريقة آمنة)
-            // هذه الدالة بدورها تستخدم المصدر الصحيح داخلياً
             YoutubeDL.getInstance().updateYoutubeDL(context)
 
-            // 4. حفظ الوقت والإصدار الجديد
             prefs.edit()
                 .putLong(KEY_LAST_UPDATE_TIME, currentTime)
                 .putString(KEY_CURRENT_VERSION, latestVersion)
@@ -145,36 +170,24 @@ class YtDlpEngine @Inject constructor(
 
             Result.success(true)
         } catch (e: Exception) {
-            // في حالة الفشل، لا نفشل التطبيق - فقط نرجع false
             Result.failure(Exception("فشل التحديث التلقائي: ${e.message}"))
         }
     }
 
-    /**
-     * ✅ التحديث اليدوي (عند الضغط على زر "تحديث" في شاشة النماذج)
-     */
     suspend fun installYtDlp(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // جلب المعلومات من GitHub أولاً
             val (latestVersion, _) = fetchLatestReleaseInfo().getOrThrow()
-
-            // استخدام المكتبة للتحديث الفعلي
             YoutubeDL.getInstance().updateYoutubeDL(context)
-
-            // حفظ الإصدار والوقت
             prefs.edit()
                 .putLong(KEY_LAST_UPDATE_TIME, System.currentTimeMillis())
                 .putString(KEY_CURRENT_VERSION, latestVersion)
                 .apply()
-
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(Exception("فشل تحديث yt-dlp: ${e.message}"))
         }
     }
 
-    // ... (باقي الدوال تبقى كما هي: extractDomain, getCookieFileForDomain, analyzeUrl, downloadVideo, downloadSubtitles, saveCookieFile, getSavedCookieFiles, deleteCookieFile)
-    
     private fun extractDomain(url: String): String? {
         return try {
             val uri = URI(url)
