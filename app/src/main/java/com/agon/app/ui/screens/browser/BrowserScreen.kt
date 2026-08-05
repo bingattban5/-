@@ -7,8 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -24,7 +26,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -41,6 +42,14 @@ import com.agon.app.ui.screens.browser.components.*
 import com.agon.app.viewmodel.BrowserViewModel
 import kotlin.math.roundToInt
 
+// 1. إنشاء واجهة الجسر لاستقبال الروابط من الجافاسكريبت
+class VideoSnifferInterface(private val onMediaFound: (String) -> Unit) {
+    @JavascriptInterface
+    fun onMediaFound(url: String) {
+        onMediaFound(url)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun BrowserScreen(
@@ -53,7 +62,7 @@ fun BrowserScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var webView by remember { mutableStateOf<WebView?>(null) }
-    
+
     // متغيرات لحفظ موقع زر التحميل العائم وتفادي خروجه من الشاشة
     var fabOffsetX by remember { mutableFloatStateOf(0f) }
     var fabOffsetY by remember { mutableFloatStateOf(0f) }
@@ -105,7 +114,7 @@ fun BrowserScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // WebView
+                // WebView (الآن أصبح صائد فيديوهات متقدم)
                 BrowserWebView(
                     currentUrl = state.activeTab?.url ?: "https://www.google.com",
                     onWebViewCreated = { webView = it },
@@ -121,11 +130,15 @@ fun BrowserScreen(
                     },
                     onLinkLongPressed = { link ->
                         viewModel.onLinkLongPressed(link)
+                    },
+                    // إرسال الروابط المكتشفة إلى ViewModel
+                    onMediaIntercepted = { mediaUrl ->
+                        viewModel.onMediaIntercepted(mediaUrl)
                     }
                 )
 
                 // ==========================================
-                // زر التحميل العائم (تصميم عصري ومستقر)
+                // زر التحميل العائم (تصميم عصري ومستقر وقابل للسحب)
                 // ==========================================
                 AnimatedVisibility(
                     visible = true,
@@ -143,7 +156,7 @@ fun BrowserScreen(
                                     fabOffsetY += dragAmount.y
                                 },
                                 onDragEnd = {
-                                    // إعادة الزر لمكانه إذا تم سحبه بعيداً جداً (حماية إضافية)
+                                    // إعادة الزر لمكانه إذا تم سحبه بعيداً جداً خارج حدود الشاشة المعقولة
                                     if (fabOffsetX > 100f || fabOffsetX < -800f) fabOffsetX = 0f
                                     if (fabOffsetY > 100f || fabOffsetY < -1500f) fabOffsetY = 0f
                                 }
@@ -277,7 +290,8 @@ private fun BrowserWebView(
     onPageFinished: (String, String, String?) -> Unit,
     onProgressChanged: (Int) -> Unit,
     onNavigationStateChange: (Boolean, Boolean) -> Unit,
-    onLinkLongPressed: (String) -> Unit
+    onLinkLongPressed: (String) -> Unit,
+    onMediaIntercepted: (String) -> Unit
 ) {
     var lastLoadedUrl by remember { mutableStateOf("") }
 
@@ -306,9 +320,35 @@ private fun BrowserWebView(
                     setSupportMultipleWindows(false)
                 }
 
+                // ربط الجسر بالمتصفح لإرسال الروابط إلى كوتلن
+                addJavascriptInterface(VideoSnifferInterface { url ->
+                    onMediaIntercepted(url)
+                }, "AndroidSniffer")
+
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                         return false
+                    }
+
+                    // اصطياد طلبات الشبكة (ملفات الميديا)
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): WebResourceResponse? {
+                        val url = request?.url?.toString()?.lowercase() ?: ""
+                        val method = request?.method ?: ""
+
+                        if (method.equals("GET", ignoreCase = true)) {
+                            if (url.contains(".mp4") || 
+                                url.contains(".m3u8") || 
+                                url.contains(".ts") || 
+                                url.contains(".webm") ||
+                                url.contains(".mp3")
+                            ) {
+                                onMediaIntercepted(request?.url?.toString() ?: "")
+                            }
+                        }
+                        return super.shouldInterceptRequest(view, request)
                     }
 
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -330,8 +370,35 @@ private fun BrowserWebView(
                                     bottomNavs.forEach(function(el) { if (el && el.style) el.style.paddingBottom = '0px'; });
                                 })();
                             """.trimIndent()
-                            
                             view?.evaluateJavascript(hideYouTubeUI, null)
+
+                            // حقن سكربت صائد الفيديوهات الذي يراقب الصفحة باستمرار
+                            val jsVideoSniffer = """
+                                javascript:(function() {
+                                    function sniffVideos() {
+                                        var videos = document.getElementsByTagName('video');
+                                        for (var i = 0; i < videos.length; i++) {
+                                            if (videos[i].src && videos[i].src.startsWith('http')) {
+                                                AndroidSniffer.onMediaFound(videos[i].src);
+                                            }
+                                            var sources = videos[i].getElementsByTagName('source');
+                                            for (var j = 0; j < sources.length; j++) {
+                                                if (sources[j].src && sources[j].src.startsWith('http')) {
+                                                    AndroidSniffer.onMediaFound(sources[j].src);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    sniffVideos();
+                                    
+                                    var observer = new MutationObserver(function(mutations) {
+                                        sniffVideos();
+                                    });
+                                    observer.observe(document.body, { childList: true, subtree: true });
+                                })();
+                            """.trimIndent()
+                            view?.evaluateJavascript(jsVideoSniffer, null)
                             
                             onPageFinished(url, title, faviconUrl)
                             onNavigationStateChange(view?.canGoBack() ?: false, view?.canGoForward() ?: false)
