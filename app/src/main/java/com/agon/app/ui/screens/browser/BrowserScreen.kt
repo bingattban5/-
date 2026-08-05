@@ -17,8 +17,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -31,6 +34,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -42,7 +47,7 @@ import com.agon.app.ui.screens.browser.components.*
 import com.agon.app.viewmodel.BrowserViewModel
 import kotlin.math.roundToInt
 
-// 1. إنشاء واجهة الجسر لاستقبال الروابط من الجافاسكريبت
+// واجهة الجسر لاستقبال الروابط من الجافاسكريبت
 class VideoSnifferInterface(private val onMediaFound: (String) -> Unit) {
     @JavascriptInterface
     fun onMediaFound(url: String) {
@@ -58,14 +63,21 @@ fun BrowserScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val pendingNavigation by viewModel.pendingNavigation.collectAsState()
+    
+    // مراقبة الروابط التي تم اصطيادها في الخلفية
+    val interceptedUrls by viewModel.interceptedMediaUrls.collectAsState()
+    
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     var webView by remember { mutableStateOf<WebView?>(null) }
 
-    // متغيرات لحفظ موقع زر التحميل العائم وتفادي خروجه من الشاشة
+    // إحداثيات الزر العائم
     var fabOffsetX by remember { mutableFloatStateOf(0f) }
     var fabOffsetY by remember { mutableFloatStateOf(0f) }
+
+    // التحكم في ظهور نافذة الروابط المصطادة
+    var showSniffedSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let {
@@ -114,7 +126,7 @@ fun BrowserScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // WebView (الآن أصبح صائد فيديوهات متقدم)
+                // صائد الفيديوهات (WebView)
                 BrowserWebView(
                     currentUrl = state.activeTab?.url ?: "https://www.google.com",
                     onWebViewCreated = { webView = it },
@@ -131,14 +143,13 @@ fun BrowserScreen(
                     onLinkLongPressed = { link ->
                         viewModel.onLinkLongPressed(link)
                     },
-                    // إرسال الروابط المكتشفة إلى ViewModel
                     onMediaIntercepted = { mediaUrl ->
                         viewModel.onMediaIntercepted(mediaUrl)
                     }
                 )
 
                 // ==========================================
-                // زر التحميل العائم (تصميم عصري ومستقر وقابل للسحب)
+                // زر التحميل العائم (FAB)
                 // ==========================================
                 AnimatedVisibility(
                     visible = true,
@@ -146,8 +157,9 @@ fun BrowserScreen(
                     exit = scaleOut(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300)),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(bottom = 32.dp, end = 24.dp) // مسافات آمنة من الحواف
-                        .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                        .padding(bottom = 32.dp, end = 24.dp)
+                        // ✅ التعديل هنا: استخدام absoluteOffset لحل مشكلة الاتجاه المعكوس
+                        .absoluteOffset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
                         .pointerInput(Unit) {
                             detectDragGestures(
                                 onDrag = { change, dragAmount ->
@@ -156,18 +168,23 @@ fun BrowserScreen(
                                     fabOffsetY += dragAmount.y
                                 },
                                 onDragEnd = {
-                                    // إعادة الزر لمكانه إذا تم سحبه بعيداً جداً خارج حدود الشاشة المعقولة
-                                    if (fabOffsetX > 100f || fabOffsetX < -800f) fabOffsetX = 0f
-                                    if (fabOffsetY > 100f || fabOffsetY < -1500f) fabOffsetY = 0f
+                                    if (fabOffsetX > 150f || fabOffsetX < -1000f) fabOffsetX = 0f
+                                    if (fabOffsetY > 150f || fabOffsetY < -2000f) fabOffsetY = 0f
                                 }
                             )
                         }
                 ) {
                     FloatingActionButton(
                         onClick = {
-                            val currentUrl = state.activeTab?.url
-                            if (!currentUrl.isNullOrBlank()) {
-                                viewModel.analyzeCurrentPage(currentUrl)
+                            // ✅ تطبيق الفكرة الذكية: التحقق من الصائد أولاً
+                            if (interceptedUrls.isNotEmpty()) {
+                                showSniffedSheet = true // إظهار القائمة السريعة
+                            } else {
+                                // إذا لم يجد الصائد شيئاً، نفذ التحليل العميق فوراً
+                                val currentUrl = state.activeTab?.url
+                                if (!currentUrl.isNullOrBlank()) {
+                                    viewModel.analyzeCurrentPage(currentUrl)
+                                }
                             }
                         },
                         modifier = Modifier
@@ -178,11 +195,10 @@ fun BrowserScreen(
                                 ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                                 spotColor = MaterialTheme.colorScheme.primary
                             ),
-                        containerColor = Color.Transparent, // لجعل الخلفية تعتمد على الـ Box الداخلي
+                        containerColor = Color.Transparent,
                         elevation = FloatingActionButtonDefaults.elevation(0.dp),
                         shape = RoundedCornerShape(20.dp)
                     ) {
-                        // خلفية متدرجة عصرية
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -203,8 +219,9 @@ fun BrowserScreen(
                                     strokeWidth = 3.dp
                                 )
                             } else {
+                                // تغيير الأيقونة بناءً على حالة الصائد
                                 Icon(
-                                    Icons.Filled.Download,
+                                    if (interceptedUrls.isNotEmpty()) Icons.Filled.Bolt else Icons.Filled.Download,
                                     contentDescription = "تحميل",
                                     tint = Color.White,
                                     modifier = Modifier.size(32.dp)
@@ -227,7 +244,91 @@ fun BrowserScreen(
             }
         }
 
-        // النوافذ المنبثقة
+        // ==========================================
+        // قائمة الروابط المصطادة (سريعة جداً)
+        // ==========================================
+        if (showSniffedSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showSniffedSheet = false },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        "فيديوهات تم اصطيادها بسرعة ⚡",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    LazyColumn(
+                        modifier = Modifier.weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(interceptedUrls.toList()) { url ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showSniffedSheet = false
+                                        // تمرير الرابط المباشر إلى yt-dlp سيكون سريعاً جداً لأنه لن يحتاج لفك تشفير الصفحة
+                                        viewModel.analyzeCurrentPage(url)
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Filled.OndemandVideo,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        url,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // زر البحث العميق في حال كانت الروابط السريعة غير مناسبة
+                    TextButton(
+                        onClick = {
+                            showSniffedSheet = false
+                            val currentUrl = state.activeTab?.url
+                            if (!currentUrl.isNullOrBlank()) {
+                                viewModel.analyzeCurrentPage(currentUrl)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("إجراء بحث عميق في الصفحة (يأخذ وقتاً أطول)")
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+
+        // ==========================================
+        // النوافذ المنبثقة الأخرى
+        // ==========================================
         if (state.showTabsList) {
             TabsListSheet(
                 tabs = state.tabs,
@@ -320,7 +421,6 @@ private fun BrowserWebView(
                     setSupportMultipleWindows(false)
                 }
 
-                // ربط الجسر بالمتصفح لإرسال الروابط إلى كوتلن
                 addJavascriptInterface(VideoSnifferInterface { url ->
                     onMediaIntercepted(url)
                 }, "AndroidSniffer")
@@ -330,7 +430,6 @@ private fun BrowserWebView(
                         return false
                     }
 
-                    // اصطياد طلبات الشبكة (ملفات الميديا)
                     override fun shouldInterceptRequest(
                         view: WebView?,
                         request: WebResourceRequest?
@@ -372,7 +471,6 @@ private fun BrowserWebView(
                             """.trimIndent()
                             view?.evaluateJavascript(hideYouTubeUI, null)
 
-                            // حقن سكربت صائد الفيديوهات الذي يراقب الصفحة باستمرار
                             val jsVideoSniffer = """
                                 javascript:(function() {
                                     function sniffVideos() {
