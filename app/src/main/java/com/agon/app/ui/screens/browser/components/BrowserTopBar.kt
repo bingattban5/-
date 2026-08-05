@@ -1,12 +1,15 @@
 package com.agon.app.ui.screens.browser.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -25,6 +28,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.agon.app.ui.screens.browser.state.BrowserState
-import com.agon.app.ui.screens.browser.state.TabInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +50,7 @@ fun BrowserTopBar(
     onMenuClick: () -> Unit
 ) {
     val activeTab = state.activeTab
+    val context = LocalContext.current
     var searchText by remember(activeTab?.url) { 
         mutableStateOf(activeTab?.url ?: "") 
     }
@@ -68,7 +72,7 @@ fun BrowserTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // زر الرجوع (يظهر فقط إذا كان يمكن الرجوع)
+            // زر الرجوع
             AnimatedContent(
                 targetState = state.canGoBack,
                 transitionSpec = {
@@ -90,7 +94,7 @@ fun BrowserTopBar(
                 }
             }
 
-            // شريط البحث/الرابط الدائري - يظهر الرابط بوضوح
+            // شريط البحث والرابط الدائري
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -133,16 +137,37 @@ fun BrowserTopBar(
                     },
                     trailingIcon = {
                         if (searchText.isNotEmpty()) {
-                            IconButton(
-                                onClick = { searchText = "" },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "مسح",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // زر النسخ السريع للرابط
+                                IconButton(
+                                    onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("URL", searchText)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "تم نسخ الرابط", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.ContentCopy,
+                                        contentDescription = "نسخ الرابط",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                
+                                // زر مسح النص
+                                IconButton(
+                                    onClick = { searchText = "" },
+                                    modifier = Modifier.size(32.dp).padding(end = 4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "مسح",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     },
@@ -180,14 +205,14 @@ fun BrowserTopBar(
                 }
             }
 
-            // عداد التبويبات المفتوحة - يحل محل أيقونة YouTube
+            // عداد التبويبات المفتوحة (يعرض الـ Favicon في الخلفية أو الرقم)
             TabsCounterButton(
-                count = state.tabsCount,
+                count = state.tabsCount, // تأكد أن state.tabsCount يتم تمريرها بشكل صحيح من الـ State
                 favicon = activeTab?.favicon,
                 onClick = onTabsClick
             )
 
-            // زر القائمة (ثلاث نقاط)
+            // زر القائمة
             IconButton(
                 onClick = onMenuClick,
                 modifier = Modifier.size(40.dp)
@@ -218,7 +243,6 @@ private fun TabsCounterButton(
         Box(
             contentAlignment = Alignment.Center
         ) {
-            // إذا كان لدينا favicon للتبويب النشط، نعرضه كخلفية
             if (favicon != null && count > 0) {
                 AsyncImage(
                     model = favicon,
@@ -228,7 +252,6 @@ private fun TabsCounterButton(
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
-                // طبقة شفافة فوق الصورة
                 Box(
                     modifier = Modifier
                         .size(36.dp)
@@ -237,12 +260,11 @@ private fun TabsCounterButton(
                 )
             }
             
-            // رقم التبويبات
             Text(
                 text = if (count > 99) "99+" else count.toString(),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = if (favicon != null) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
