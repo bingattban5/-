@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,14 +28,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.agon.app.ui.screens.browser.state.BrowserState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,10 +50,15 @@ fun BrowserTopBar(
 ) {
     val activeTab = state.activeTab
     val context = LocalContext.current
-    var searchText by remember(activeTab?.url) { 
-        mutableStateOf(activeTab?.url ?: "") 
-    }
+    var searchText by remember { mutableStateOf(activeTab?.url ?: "") }
     var isFocused by remember { mutableStateOf(false) }
+    
+    // المزامنة: تحديث النص التلقائي عندما يتغير رابط الموقع وتكون خانة البحث غير محددة
+    LaunchedEffect(activeTab?.url) {
+        if (!isFocused) {
+            searchText = activeTab?.url ?: ""
+        }
+    }
     
     val glowColor = MaterialTheme.colorScheme.primary.copy(
         alpha = if (isFocused) 0.3f else 0f
@@ -138,7 +142,6 @@ fun BrowserTopBar(
                     trailingIcon = {
                         if (searchText.isNotEmpty()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // زر النسخ السريع للرابط
                                 IconButton(
                                     onClick = {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -156,7 +159,6 @@ fun BrowserTopBar(
                                     )
                                 }
                                 
-                                // زر مسح النص
                                 IconButton(
                                     onClick = { searchText = "" },
                                     modifier = Modifier.size(32.dp).padding(end = 4.dp)
@@ -191,7 +193,6 @@ fun BrowserTopBar(
                     )
                 )
 
-                // شريط التقدم أثناء التحميل
                 if (activeTab?.isLoading == true) {
                     LinearProgressIndicator(
                         progress = { (activeTab.progress / 100f) },
@@ -205,10 +206,9 @@ fun BrowserTopBar(
                 }
             }
 
-            // عداد التبويبات المفتوحة (يعرض الـ Favicon في الخلفية أو الرقم)
+            // عداد التبويبات المفتوحة الجديد (رقم فقط بدون صورة موقع)
             TabsCounterButton(
-                count = state.tabsCount, // تأكد أن state.tabsCount يتم تمريرها بشكل صحيح من الـ State
-                favicon = activeTab?.favicon,
+                count = state.tabsCount,
                 onClick = onTabsClick
             )
 
@@ -227,45 +227,28 @@ fun BrowserTopBar(
     }
 }
 
+// تصميم بسيط وأنيق لعداد التبويبات بدون صور
 @Composable
 private fun TabsCounterButton(
     count: Int,
-    favicon: String?,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
-            .size(44.dp)
+            .size(40.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Box(
             contentAlignment = Alignment.Center
         ) {
-            if (favicon != null && count > 0) {
-                AsyncImage(
-                    model = favicon,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.3f))
-                )
-            }
-            
             Text(
                 text = if (count > 99) "99+" else count.toString(),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (favicon != null) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.align(Alignment.Center)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
