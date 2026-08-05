@@ -51,6 +51,10 @@ class BrowserViewModel @Inject constructor(
     private val _pendingNavigation = MutableStateFlow<String?>(null)
     val pendingNavigation: StateFlow<String?> = _pendingNavigation.asStateFlow()
 
+    // ✅ جديد: قائمة لحفظ الروابط المباشرة (فيديوهات/صوتيات) التي يصطادها المتصفح في الخلفية
+    private val _interceptedMediaUrls = MutableStateFlow<Set<String>>(emptySet())
+    val interceptedMediaUrls: StateFlow<Set<String>> = _interceptedMediaUrls.asStateFlow()
+
     init {
         viewModelScope.launch {
             combine(tabManager.tabs, tabManager.activeTabIndex) { tabs, activeIndex ->
@@ -99,6 +103,9 @@ class BrowserViewModel @Inject constructor(
     // ========================================
 
     fun onPageStarted(url: String) {
+        // ✅ مسح الروابط المصطادة القديمة عند فتح صفحة جديدة
+        _interceptedMediaUrls.value = emptySet()
+        
         tabManager.getActiveTab()?.let { tab ->
             tabManager.updateTab(tab.id) {
                 it.copy(isLoading = true, url = url, progress = 0)
@@ -142,6 +149,18 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ========================================
+    // ✅ جديد: استقبال الروابط المصطادة من المتصفح
+    // ========================================
+    fun onMediaIntercepted(mediaUrl: String) {
+        val currentSet = _interceptedMediaUrls.value.toMutableSet()
+        if (currentSet.add(mediaUrl)) { // إذا كان الرابط جديداً وغير مكرر
+            _interceptedMediaUrls.value = currentSet
+            // يمكنك طباعة الرابط هنا لاختباره في الـ Logcat
+            android.util.Log.d("VideoSniffer", "Media Intercepted: $mediaUrl")
+        }
+    }
+
+    // ========================================
     // تحليل الصفحة الحالية
     // ========================================
 
@@ -152,6 +171,7 @@ class BrowserViewModel @Inject constructor(
                 analysisStep = "جاري تحليل الصفحة..."
             )
 
+            // هنا يستخدم yt-dlp لتحليل الصفحة
             val result = analyzeUrlUseCase(url)
 
             result.onSuccess { videoInfo ->
@@ -168,6 +188,9 @@ class BrowserViewModel @Inject constructor(
             }
 
             result.onFailure { error ->
+                // ✅ ميزة قادمة: إذا فشل yt-dlp، يمكنك التحقق مما إذا كانت قائمة interceptedMediaUrls 
+                // تحتوي على روابط، وعرضها للمستخدم بدلاً من رسالة الخطأ!
+                
                 _state.value = _state.value.copy(
                     isAnalyzing = false,
                     errorMessage = "لم يتم العثور على فيديو في هذه الصفحة: ${error.message}"
@@ -199,7 +222,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     // ========================================
-    // التنزيل الفعلي (إصلاح نهائي مع ربط الإعدادات)
+    // التنزيل الفعلي
     // ========================================
 
     fun startSpecificDownload(mode: DownloadMode, method: SubtitleMethod) {
@@ -210,7 +233,6 @@ class BrowserViewModel @Inject constructor(
                 val quality = currentState.selectedQuality ?: throw IllegalStateException("لم يتم اختيار الجودة")
                 val url = currentState.detectedVideoUrl ?: throw IllegalStateException("الرابط غير متوفر")
 
-                // ✅ الإصلاح النهائي: قراءة الصيغة من DataStore باستخدام .first()
                 val subtitleFormat = appPreferencesRepository.subtitleFormatFlow.first()
 
                 val downloadId = UUID.randomUUID().toString()
